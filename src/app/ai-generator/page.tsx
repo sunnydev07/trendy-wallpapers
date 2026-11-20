@@ -1,5 +1,6 @@
 import { Cpu, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import type { Metadata } from "next";
+import { getAdSenseSlotId } from "@/lib/env";
 import { AdSlot } from "@/components/AdSlot";
 import { AiStudioClient } from "@/components/AiStudioClient";
 
@@ -34,6 +35,7 @@ export default function AiGeneratorPage() {
       {/* AdSense spacing guardrail: >= 48px away from Generate button */}
       <AdSlot
         slot="ai-studio-below-fold"
+        adUnitId={getAdSenseSlotId("studio")}
         format="horizontal"
         minHeight={120}
         label="AI Studio Display Slot"

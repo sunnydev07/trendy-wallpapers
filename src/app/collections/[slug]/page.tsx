@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AdSlot } from "@/components/AdSlot";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { getAllCollections, getCollectionBySlug } from "@/lib/data-provider";
-import { getSiteUrl } from "@/lib/env";
+import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
 
 interface CollectionPageProps {
   params: Promise<{ slug: string }>;
@@ -89,6 +89,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
 
       <AdSlot
         slot="collection-footer-display"
+        adUnitId={getAdSenseSlotId("collection")}
         format="horizontal"
         minHeight={120}
         label="Collection Display Slot"

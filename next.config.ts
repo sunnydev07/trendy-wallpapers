@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp"],
   images: {
     unoptimized: true,
+    // Omitting `search` matches any query string, so bounded preview URLs are allowed.
+    localPatterns: [
+      { pathname: "/api/download" },
+      { pathname: "/api/demo-image/**" },
+      { pathname: "/curated/**" },
+    ],
     remotePatterns: [
       {
         protocol: "https",

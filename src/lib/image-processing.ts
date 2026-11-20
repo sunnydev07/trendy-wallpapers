@@ -65,7 +65,8 @@ export function computeAspectRatioLabel(width: number, height: number): string {
   if (ratio >= 3.0) return "32:9";
   if (ratio >= 2.15) return "21:9";
   if (ratio >= 1.65) return "16:9";
-  if (ratio >= 1.25) return "4:3";
+  if (ratio >= 1.45) return "3:2";
+  if (ratio >= 1.15) return "4:3";
   if (ratio >= 0.85) return "1:1";
   return "9:16";
 }

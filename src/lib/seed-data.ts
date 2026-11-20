@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { CURATED_WALLPAPERS } from "@/data/curated-wallpapers";
 import { isDemoMode } from "./env";
 import type {
   CategoryInfo,
@@ -247,6 +248,17 @@ export const CATEGORIES: CategoryInfo[] = [
       "Designed for developers, designers, and video editors who spend ten hours a day in front of their monitors, our Abstract & Liquid Glass collection uses subtle depth cues and smooth 16-bit-sourced gradients to keep your workspace refined without visual fatigue.",
     accentHex: "#10B981",
     keywords: ["liquid glass wallpaper", "dark abstract 4k wallpaper", "minimal workspace background"],
+  },
+  {
+    slug: "nature-cosmos",
+    name: "Nature & Cosmos",
+    headline: "Aurora, Night Sky & Landscape 4K Wallpapers",
+    description:
+      "Community-curated aurora curtains, Milky Way arches, alpine ridgelines and coastal dusk photography in native high resolution.",
+    editorialIntro:
+      "Every frame in this collection is a real photograph selected from community-featured archives for technical quality: clean gradients without banding, deep star fields, and horizons placed low enough to leave room for docks and widgets. Licensed for reuse with photographer credit on each wallpaper page.",
+    accentHex: "#38BDF8",
+    keywords: ["aurora wallpaper 4k", "milky way wallpaper", "night landscape wallpaper", "nature desktop background"],
   },
 ];
 
@@ -882,7 +894,10 @@ function persistDemoWallpapers(items: Wallpaper[]): void {
   try {
     const target = demoStorePath();
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, JSON.stringify(items.slice(0, DEMO_STORE_PERSIST_MAX)));
+    // Atomic write: a crash mid-write must never leave a truncated JSON blob.
+    const tmp = `${target}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(items.slice(0, DEMO_STORE_PERSIST_MAX)));
+    fs.renameSync(tmp, target);
   } catch {
     // Demo persistence is best-effort; an unwritable cache must not break generation.
   }
@@ -900,7 +915,49 @@ export function registerDemoWallpaper(wallpaper: Wallpaper): void {
 }
 
 export function getDemoWallpapers(): Wallpaper[] {
-  return [...runtimeDemoWallpapers, ...SEED_WALLPAPERS];
+  return [...runtimeDemoWallpapers, ...CURATED_WALLPAPERS, ...SEED_WALLPAPERS];
+}
+
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".uploads");
+const CURATED_ORIGINALS_DIR = path.join(process.cwd(), "public", "curated", "originals");
+
+/** Reads a source-controlled curated original (path-traversal-safe). */
+export function readCuratedOriginal(originalKey: string): Buffer | null {
+  const name = path.basename(originalKey);
+  if (!/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return null;
+  try {
+    return fs.readFileSync(path.join(CURATED_ORIGINALS_DIR, name));
+  } catch {
+    return null;
+  }
+}
+
+/** Demo-mode storage for real uploaded artwork so it is viewable without R2. */
+export function saveLocalUpload(
+  slug: string,
+  extension: "jpg" | "png" | "webp",
+  original: Buffer,
+  thumb: Buffer
+): { originalKey: string; thumbKey: string } {
+  if (!isDemoMode()) throw new Error("Local upload storage is only used in demo mode.");
+  const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
+  fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+  fs.writeFileSync(path.join(LOCAL_UPLOAD_DIR, `${safeSlug}.${extension}`), original);
+  fs.writeFileSync(path.join(LOCAL_UPLOAD_DIR, `${safeSlug}.webp`), thumb);
+  return {
+    originalKey: `originals/${safeSlug}.${extension}`,
+    thumbKey: `thumbs/${safeSlug}.webp`,
+  };
+}
+
+/** Resolves an original key against locally stored demo uploads. */
+export function readLocalUpload(originalKey: string): Buffer | null {
+  const name = path.basename(originalKey);
+  try {
+    return fs.readFileSync(path.join(LOCAL_UPLOAD_DIR, name));
+  } catch {
+    return null;
+  }
 }
 
 const demoSvgCache = new Map<string, string>();

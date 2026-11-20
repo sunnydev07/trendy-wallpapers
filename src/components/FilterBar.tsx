@@ -25,7 +25,7 @@ const COLOR_SWATCHES = [
 
 const SOURCE_OPTIONS: { value: SourceFilterValue; label: string }[] = [
   { value: "all", label: "All Sources" },
-  { value: "human", label: "Human & Official" },
+  { value: "human", label: "Human & Licensed" },
   { value: "ai", label: "AI Generated" },
 ];
 

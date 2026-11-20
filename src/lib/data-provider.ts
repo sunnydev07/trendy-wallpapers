@@ -132,7 +132,10 @@ export function applyInMemoryFilters(
 
   if (filters.source === "human") {
     result = result.filter(
-      (item) => item.source_type === "original" || item.source_type === "official_press"
+      (item) =>
+        item.source_type === "original" ||
+        item.source_type === "official_press" ||
+        item.source_type === "licensed_stock"
     );
   } else if (filters.source === "ai") {
     result = result.filter((item) => item.source_type === "ai_generated");

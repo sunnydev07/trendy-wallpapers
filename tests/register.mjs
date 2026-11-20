@@ -4,9 +4,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import ts from "typescript";
 
+// Anchor the @/ alias to the project root, not the child process cwd.
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith("@/")) specifier = pathToFileURL(path.resolve("src", specifier.slice(2))).href;
+    if (specifier.startsWith("@/")) specifier = pathToFileURL(path.join(PROJECT_ROOT, "src", specifier.slice(2))).href;
     try { return nextResolve(specifier, context); } catch (error) {
       if (specifier.startsWith("next/")) {
         try { return nextResolve(`${specifier}.js`, context); } catch { /* fall through */ }

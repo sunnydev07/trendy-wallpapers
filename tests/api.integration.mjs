@@ -60,3 +60,32 @@ test("DMCA and generation reject malformed payloads", async () => {
     assert.ok((await response.json()).error);
   }
 });
+test("admin rejects unsupported SVG uploads with 415", async () => {
+  const form = new FormData();
+  form.set("file", new Blob(["<svg xmlns='http://www.w3.org/2000/svg'/>"], { type: "image/svg+xml" }), "vec.svg");
+  form.set("title", "Vector upload");
+  form.set("description", "This SVG fixture verifies that unsupported vector uploads are rejected with a 415 status.");
+  const response = await get("/api/admin/upload", { method: "POST", headers: { authorization: `Bearer ${process.env.ADMIN_UPLOAD_SECRET}` }, body: form });
+  await response.arrayBuffer();
+  assert.equal(response.status, 415);
+});
+test("admin rejects oversized uploads with 413", async () => {
+  const form = new FormData();
+  form.set("file", new Blob([Buffer.alloc(41 * 1024 * 1024)], { type: "image/png" }), "big.png");
+  form.set("title", "Oversized upload");
+  form.set("description", "This oversized fixture verifies that uploads above the 40 MB limit are rejected with 413.");
+  const response = await get("/api/admin/upload", { method: "POST", headers: { authorization: `Bearer ${process.env.ADMIN_UPLOAD_SECRET}` }, body: form });
+  await response.arrayBuffer();
+  assert.equal(response.status, 413);
+});
+test("collections index renders", async () => {
+  const response = await get("/collections");
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.ok(html.includes("Wallpaper Collections"));
+});
+test("demo-image returns 404 for an unknown slug", async () => {
+  const response = await get("/api/demo-image/definitely-not-a-real-slug");
+  await response.arrayBuffer();
+  assert.equal(response.status, 404);
+});

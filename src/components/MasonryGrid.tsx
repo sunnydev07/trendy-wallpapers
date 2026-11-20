@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Fragment } from "react";
 import type { Wallpaper } from "@/types/wallpaper";
+import { getAdSenseSlotId } from "@/lib/env";
 import { AdSlot } from "./AdSlot";
 
 interface MasonryGridProps {
@@ -16,6 +17,12 @@ function getSourceBadge(sourceType: Wallpaper["source_type"]) {
     return {
       label: "AI Generated",
       className: "border-[#FF2E93]/40 bg-[#FF2E93]/15 text-pink-200",
+    };
+  }
+  if (sourceType === "licensed_stock") {
+    return {
+      label: "Licensed Photo",
+      className: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
     };
   }
   if (sourceType === "official_press") {
@@ -164,6 +171,7 @@ export function MasonryGrid({
           {showInFeedAds && chunk.length === 12 && (
             <AdSlot
               slot={`in-feed-grid-${chunkIdx + 1}`}
+              adUnitId={getAdSenseSlotId("infeed")}
               format="fluid"
               minHeight={120}
               label="In-Feed Discovery Slot"

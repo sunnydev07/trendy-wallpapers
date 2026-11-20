@@ -14,6 +14,22 @@ export function getAdSenseClientId(): string | null {
   return id && id.startsWith("ca-pub-") ? id : null;
 }
 
+export type AdSensePlacement = "infeed" | "detail" | "guide" | "studio" | "collection";
+
+const AD_SLOT_ENV: Record<AdSensePlacement, string> = {
+  infeed: "NEXT_PUBLIC_ADSENSE_SLOT_INFEED",
+  detail: "NEXT_PUBLIC_ADSENSE_SLOT_DETAIL",
+  guide: "NEXT_PUBLIC_ADSENSE_SLOT_GUIDE",
+  studio: "NEXT_PUBLIC_ADSENSE_SLOT_STUDIO",
+  collection: "NEXT_PUBLIC_ADSENSE_SLOT_COLLECTION",
+};
+
+/** Numeric AdSense ad-unit IDs per placement; invalid/missing ids resolve to null. */
+export function getAdSenseSlotId(placement: AdSensePlacement): string | null {
+  const id = process.env[AD_SLOT_ENV[placement]]?.trim();
+  return id && /^\d{6,}$/.test(id) ? id : null;
+}
+
 export function isSupabaseConfigured(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&

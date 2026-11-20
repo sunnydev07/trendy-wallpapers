@@ -1,6 +1,7 @@
 import { ArrowRight, BookOpen, Clock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getAdSenseSlotId } from "@/lib/env";
 import { AdSlot } from "@/components/AdSlot";
 import { getAllGuides } from "@/lib/guides";
 
@@ -75,6 +76,7 @@ export default async function GuidesIndexPage() {
 
       <AdSlot
         slot="guides-index-bottom"
+        adUnitId={getAdSenseSlotId("guide")}
         format="horizontal"
         minHeight={120}
         label="Guides Index Display Slot"

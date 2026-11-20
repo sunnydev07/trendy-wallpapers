@@ -3,7 +3,7 @@
 
 create extension if not exists "pgcrypto";
 
-create type wallpaper_source_type as enum ('original', 'ai_generated', 'official_press');
+create type wallpaper_source_type as enum ('original', 'ai_generated', 'official_press', 'licensed_stock');
 
 create table public.wallpapers (
   id uuid primary key default gen_random_uuid(),

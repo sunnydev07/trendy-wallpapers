@@ -33,6 +33,18 @@ npm run typecheck
 npm run build
 ```
 
+### Content portability & monetization notes
+
+- **Curated wallpapers are source-controlled.** The freely-licensed photographs live in
+  `public/curated/` with typed metadata in `src/data/curated-wallpapers.ts`, so a fresh
+  clone or deploy shows them with no external storage. Regenerate after adding licensed
+  images with `node scripts/migrate-curated.mjs`.
+- **Demo AI/admin output is local-only.** `.demo-wallpapers.json` and `.uploads/` are
+  gitignored and filesystem-based; they are **not** valid on serverless hosts. Production
+  AI generation and admin publishing require Supabase + R2 (steps above).
+- **AdSense renders only when configured.** Set `NEXT_PUBLIC_ADSENSE_CLIENT_ID` *and* the
+  numeric `NEXT_PUBLIC_ADSENSE_SLOT_*` IDs; otherwise CLS-reserved placeholders are shown.
+
 ## Admin Upload Endpoint
 
 Upload new high-resolution wallpapers (auto-generates `<= 600px` WebP thumbnail, extracts top 5 dominant hex colors, detects True OLED dark status, uploads to R2, and inserts into Supabase):

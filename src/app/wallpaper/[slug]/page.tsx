@@ -22,7 +22,7 @@ import {
   getRelatedWallpapers,
   getWallpaperBySlug,
 } from "@/lib/data-provider";
-import { getSiteUrl } from "@/lib/env";
+import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
 
 interface WallpaperDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -73,7 +73,9 @@ export default async function WallpaperDetailPage({
       ? "AI Generated"
       : wallpaper.source_type === "official_press"
         ? "Official Press"
-        : "Original Artwork";
+        : wallpaper.source_type === "licensed_stock"
+          ? "Licensed Photo"
+          : "Original Artwork";
 
   // Structured Data (ImageObject JSON-LD) for Google Image & Rich Search indexing
   const jsonLd = {
@@ -261,6 +263,7 @@ export default async function WallpaperDetailPage({
       {/* CLS-safe AdSlot placed strictly >= 48px away from Download controls */}
       <AdSlot
         slot="wallpaper-detail-horizontal"
+        adUnitId={getAdSenseSlotId("detail")}
         format="horizontal"
         minHeight={120}
         label="Detail Page Display Slot"

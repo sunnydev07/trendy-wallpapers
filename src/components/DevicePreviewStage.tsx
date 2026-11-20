@@ -15,10 +15,12 @@ function StageImage({
   wallpaper,
   alt,
   contain = false,
+  priority = false,
 }: {
   wallpaper: Wallpaper;
   alt: string;
   contain?: boolean;
+  priority?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -44,6 +46,7 @@ function StageImage({
       alt={alt}
       fill
       unoptimized
+      priority={priority}
       sizes="(min-width: 1024px) 720px, calc(100vw - 3rem)"
       onError={() => setFailed(true)}
       className={contain ? "object-contain" : "object-cover"}
@@ -116,7 +119,7 @@ export function DevicePreviewStage({ wallpaper }: DevicePreviewStageProps) {
             className="relative w-full max-w-[900px] overflow-hidden rounded-xl border border-white/10 shadow-2xl"
             style={{ aspectRatio: `${wallpaper.width} / ${wallpaper.height}` }}
           >
-            <StageImage wallpaper={wallpaper} alt={wallpaper.title} contain />
+            <StageImage wallpaper={wallpaper} alt={wallpaper.title} contain priority />
           </div>
         )}
 

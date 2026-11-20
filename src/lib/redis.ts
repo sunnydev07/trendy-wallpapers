@@ -264,3 +264,42 @@ export async function consumeAiQuota(
     },
   };
 }
+
+/**
+ * Per-IP budget for uncached image renders. Cache hits and 304s bypass this so
+ * legitimate browsing is never throttled; only fresh Sharp work is rate-limited.
+ */
+export const DOWNLOAD_RENDER_LIMIT = 20;
+const demoDownloadMap = new Map<string, { count: number; window: number }>();
+let downloadLimiterSingleton: Ratelimit | null = null;
+
+function getDownloadLimiter(): Ratelimit | null {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  if (!downloadLimiterSingleton) {
+    downloadLimiterSingleton = new Ratelimit({
+      redis,
+      limiter: Ratelimit.fixedWindow(DOWNLOAD_RENDER_LIMIT, "60 s"),
+      prefix: "tw:rl:download",
+    });
+  }
+  return downloadLimiterSingleton;
+}
+
+export async function limitDownloadRequests(
+  identifier: string
+): Promise<{ allowed: boolean; remaining: number }> {
+  const limiter = getDownloadLimiter();
+  if (!limiter) {
+    const window = Math.floor(Date.now() / 60_000);
+    const record = demoDownloadMap.get(identifier);
+    const count = record && record.window === window ? record.count : 0;
+    if (count >= DOWNLOAD_RENDER_LIMIT) return { allowed: false, remaining: 0 };
+    demoDownloadMap.set(identifier, { count: count + 1, window });
+    return { allowed: true, remaining: DOWNLOAD_RENDER_LIMIT - count - 1 };
+  }
+  const result = await limiter.limit(identifier);
+  // A storage timeout must not silently permit unlimited paid compute.
+  if (result.reason === "timeout") return { allowed: false, remaining: 0 };
+  return { allowed: result.success, remaining: Math.max(0, result.remaining) };
+}

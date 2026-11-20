@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { getAdminUploadSecret, isR2Configured, isSupabaseAdminConfigured } from "@/lib/env";
+import { getAdminUploadSecret, isDemoMode, isR2Configured, isSupabaseAdminConfigured } from "@/lib/env";
 import {
   generateThumbnailBuffer,
   inspectWallpaperBuffer,
 } from "@/lib/image-processing";
 import { uploadToR2 } from "@/lib/r2";
+import { registerDemoWallpaper, saveLocalUpload } from "@/lib/seed-data";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import type { DeviceType, WallpaperSourceType } from "@/types/wallpaper";
 
 export const runtime = "nodejs";
+
+const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES: Record<string, "jpg" | "png" | "webp"> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
 
 function slugify(value: string): string {
   return value
@@ -45,6 +53,15 @@ export async function POST(request: NextRequest) {
 
   if (token !== expectedSecret) {
     return NextResponse.json({ error: "Unauthorized upload request." }, { status: 401 });
+  }
+
+  // Reject oversized bodies before buffering anything into memory.
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_UPLOAD_BYTES + 5 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "Upload exceeds the 40 MB limit." },
+      { status: 413, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   try {
@@ -85,6 +102,7 @@ export async function POST(request: NextRequest) {
       "original",
       "ai_generated",
       "official_press",
+      "licensed_stock",
     ];
     const sourceType: WallpaperSourceType = allowedSources.includes(
       sourceTypeRaw as WallpaperSourceType
@@ -92,8 +110,19 @@ export async function POST(request: NextRequest) {
       ? (sourceTypeRaw as WallpaperSourceType)
       : "original";
 
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Uploaded file must be an image." }, { status: 400 });
+    const originalExt = ALLOWED_IMAGE_TYPES[file.type];
+    if (!originalExt) {
+      return NextResponse.json(
+        { error: "Only JPEG, PNG or WebP images are accepted." },
+        { status: 415, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "Image exceeds the 40 MB limit." },
+        { status: 413, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -118,7 +147,6 @@ export async function POST(request: NextRequest) {
       .filter(Boolean);
     const deviceTypes = inferDeviceTypes(metadata.width, metadata.height);
 
-    const originalExt = file.type === "image/jpeg" ? "jpg" : "png";
     const r2OriginalKey = `originals/${slug}.${originalExt}`;
     const r2ThumbKey = `thumbs/${slug}.webp`;
 
@@ -176,6 +204,47 @@ export async function POST(request: NextRequest) {
         status: "published",
         mode: "live",
         wallpaper: data,
+      });
+    }
+
+    if (isDemoMode()) {
+      const extension = originalExt === "jpg" ? "jpg" : "png";
+      const stored = saveLocalUpload(slug, extension, originalBuffer, thumbBuffer);
+      const created = new Date().toISOString();
+
+      registerDemoWallpaper({
+        id: crypto.randomUUID(),
+        slug,
+        title,
+        description,
+        source_type: sourceType,
+        category_slug: categorySlug,
+        tags,
+        dominant_colors: metadata.dominantColors,
+        width: metadata.width,
+        height: metadata.height,
+        aspect_ratio: metadata.aspectRatio,
+        device_types: deviceTypes,
+        r2_original_key: stored.originalKey,
+        r2_thumb_key: stored.thumbKey,
+        thumb_url: `/api/demo-image/${slug}`,
+        preview_url: `/api/download?slug=${encodeURIComponent(slug)}&w=1200&format=webp&preview=1`,
+        downloads_count: 0,
+        views_count: 1,
+        is_textless: isTextless,
+        is_oled_dark: metadata.isOledDark,
+        attribution_text: attributionText,
+        is_published: true,
+        created_at: created,
+      });
+      revalidateTag("wallpapers");
+
+      return NextResponse.json({
+        status: "published_demo",
+        mode: "demo",
+        slug,
+        detailUrl: `/wallpaper/${slug}`,
+        metadata,
       });
     }
 

@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getWallpaperBySlug, incrementDownloadCount } from "@/lib/data-provider";
 import { isR2Configured } from "@/lib/env";
-import { processSmartDownload } from "@/lib/image-processing";
+import { ImageProcessingBusyError, processSmartDownload } from "@/lib/image-processing";
 import { fetchFromR2 } from "@/lib/r2";
-import { getDemoArtSvgForSlug } from "@/lib/seed-data";
+import { hashClientIp, limitDownloadRequests } from "@/lib/redis";
+import { getDemoArtSvgForSlug, readCuratedOriginal, readLocalUpload } from "@/lib/seed-data";
 
 export const runtime = "nodejs";
 
@@ -43,16 +44,16 @@ function readDimension(
 async function loadProcessed(
   key: string,
   build: () => Promise<Processed>
-): Promise<Processed> {
+): Promise<{ processed: Processed; cached: boolean }> {
   const hit = cache.get(key);
   if (hit) {
     cache.delete(key);
     cache.set(key, hit);
-    return hit;
+    return { processed: hit, cached: true };
   }
 
   const pending = inflight.get(key);
-  if (pending) return pending;
+  if (pending) return { processed: await pending, cached: true };
 
   const job = build().finally(() => inflight.delete(key));
   inflight.set(key, job);
@@ -67,7 +68,13 @@ async function loadProcessed(
     cache.delete(oldestKey);
     if (oldestEntry) cacheBytes -= oldestEntry.buffer.byteLength;
   }
-  return processed;
+  return { processed, cached: false };
+}
+
+function clientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return request.headers.get("x-real-ip")?.trim() || "127.0.0.1";
 }
 
 export async function GET(request: NextRequest) {
@@ -137,10 +144,27 @@ export async function GET(request: NextRequest) {
   ].join(":");
 
   try {
-    const processed = await loadProcessed(cacheKey, async () => {
+    // Only fresh renders consume the per-IP budget; cache hits and 304s are free.
+    if (!cache.has(cacheKey)) {
+      const budget = await limitDownloadRequests(hashClientIp(clientIp(request)));
+      if (!budget.allowed) {
+        return NextResponse.json(
+          { error: "Too many download requests. Please retry shortly.", code: "RATE_LIMITED" },
+          { status: 429, headers: { "Retry-After": "30" } }
+        );
+      }
+    }
+
+    const { processed, cached } = await loadProcessed(cacheKey, async () => {
       let sourceBuffer: Buffer | null = null;
       if (isR2Configured()) {
         sourceBuffer = await fetchFromR2(wallpaper.r2_original_key);
+      }
+      if (!sourceBuffer) {
+        sourceBuffer = readLocalUpload(wallpaper.r2_original_key);
+      }
+      if (!sourceBuffer) {
+        sourceBuffer = readCuratedOriginal(wallpaper.r2_original_key);
       }
       if (!sourceBuffer) {
         const demoSvg = getDemoArtSvgForSlug(wallpaper.slug, targetWidth, targetHeight);
@@ -163,7 +187,8 @@ export async function GET(request: NextRequest) {
       return new NextResponse(null, { status: 304, headers: { ETag: etag } });
     }
 
-    if (!isPreview) {
+    // Count a download only when it was actually rendered, not on repeat cache hits.
+    if (!isPreview && !cached) {
       void incrementDownloadCount(wallpaper.id).catch(() => {});
     }
 
@@ -187,6 +212,12 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(new Uint8Array(processed.buffer), { status: 200, headers });
   } catch (err) {
+    if (err instanceof ImageProcessingBusyError) {
+      return NextResponse.json(
+        { error: err.message, code: "IMAGE_BUSY" },
+        { status: 503, headers: { "Retry-After": "3" } }
+      );
+    }
     const message =
       err instanceof Error ? err.message : "Failed to process wallpaper download.";
     const status = /unavailable|not found/i.test(message) ? 404 : 500;

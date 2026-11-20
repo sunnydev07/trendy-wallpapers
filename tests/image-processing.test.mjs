@@ -13,6 +13,11 @@ test("EXIF orientation is reflected in advertised dimensions", async () => {
   const meta = await inspectWallpaperBuffer(buffer);
   assert.deepEqual([meta.width, meta.height], [60, 80]);
 });
+test("three-by-two photos are labelled 3:2, not 4:3", async () => {
+  const buffer = await sharp({ create: { width: 90, height: 60, channels: 3, background: "#101010" } }).png().toBuffer();
+  const meta = await inspectWallpaperBuffer(buffer);
+  assert.equal(meta.aspectRatio, "3:2");
+});
 test("oversized vector inputs are rejected before rasterization", async () => {
   const buffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10000" height="10000"><rect width="1" height="1"/></svg>');
   await assert.rejects(() => processSmartDownload(buffer, { width: 320, format: "png" }), /pixel|limit|large/i);

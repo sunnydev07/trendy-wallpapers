@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { AdSlot } from "@/components/AdSlot";
-import { getSiteUrl } from "@/lib/env";
+import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
 import { getAllGuides, getGuideBySlug } from "@/lib/guides";
 
 interface GuideArticlePageProps {
@@ -118,7 +118,9 @@ export default async function GuideArticlePage({ params }: GuideArticlePageProps
           <MDXRemote
             source={guide.content}
             components={{
-              AdSlot,
+              AdSlot: (props: React.ComponentProps<typeof AdSlot>) => (
+                <AdSlot {...props} adUnitId={getAdSenseSlotId("guide")} />
+              ),
             }}
           />
         </div>

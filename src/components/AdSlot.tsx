@@ -7,7 +7,7 @@ interface AdSlotProps {
   /** Human-readable placement label, shown in the reserved preview frame. */
   slot: string;
   /** Numeric AdSense ad unit ID. Live ads only render when this is a valid ID. */
-  adUnitId?: string;
+  adUnitId?: string | null;
   format?: "auto" | "fluid" | "rectangle" | "horizontal";
   minHeight?: number;
   label?: string;

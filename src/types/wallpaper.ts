@@ -1,4 +1,4 @@
-export type WallpaperSourceType = "original" | "ai_generated" | "official_press";
+export type WallpaperSourceType = "original" | "ai_generated" | "official_press" | "licensed_stock";
 
 export type DeviceType = "desktop" | "ultrawide" | "mobile" | "tablet";
 

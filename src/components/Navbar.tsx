@@ -47,11 +47,14 @@ export function Navbar({ demoMode = false }: NavbarProps) {
             const isActive =
               link.href === "/"
                 ? pathname === "/"
-                : pathname.startsWith(link.href.split("/").slice(0, 2).join("/"));
+                : pathname === link.href ||
+                  (link.href.startsWith("/collections/") &&
+                    (pathname === "/collections" || pathname.startsWith("/collections/")));
             return (
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={isActive ? "page" : undefined}
                 className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-white/[0.08] text-white ring-1 ring-inset ring-white/15"
