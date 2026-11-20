@@ -16,6 +16,7 @@ import { ColorPaletteChips } from "@/components/ColorPaletteChips";
 import { DevicePreviewStage } from "@/components/DevicePreviewStage";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { SmartDownloadPanel } from "@/components/SmartDownloadPanel";
+import { ViewCount } from "@/components/ViewCount";
 import {
   getAllPublishedWallpaperSlugs,
   getCategoryBySlug,
@@ -23,6 +24,7 @@ import {
   getWallpaperBySlug,
 } from "@/lib/data-provider";
 import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 interface WallpaperDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -99,7 +101,7 @@ export default async function WallpaperDetailPage({
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb */}
@@ -239,7 +241,10 @@ export default async function WallpaperDetailPage({
                   Views
                 </dt>
                 <dd className="font-mono font-semibold text-white">
-                  {wallpaper.views_count.toLocaleString()}
+                  <ViewCount
+                    wallpaperId={wallpaper.id}
+                    initialCount={wallpaper.views_count}
+                  />
                 </dd>
               </div>
               <div className="flex items-center justify-between">

@@ -286,6 +286,75 @@ function getDownloadLimiter(): Ratelimit | null {
   return downloadLimiterSingleton;
 }
 
+/**
+ * Per-IP budget for view beacons. Duplicate visits are deduplicated separately; this
+ * only stops one client from spraying the endpoint.
+ */
+export const VIEW_REQUESTS_PER_MINUTE = 60;
+export const VIEW_DEDUPE_TTL_SECONDS = 60 * 60 * 24;
+
+const demoViewLimitMap = new Map<string, { count: number; window: number }>();
+const demoViewSeenMap = new Map<string, number>();
+let viewLimiterSingleton: Ratelimit | null = null;
+
+function getViewLimiter(): Ratelimit | null {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  if (!viewLimiterSingleton) {
+    viewLimiterSingleton = new Ratelimit({
+      redis,
+      limiter: Ratelimit.fixedWindow(VIEW_REQUESTS_PER_MINUTE, "60 s"),
+      prefix: "tw:rl:views",
+    });
+  }
+  return viewLimiterSingleton;
+}
+
+export async function limitViewRequests(
+  identifier: string
+): Promise<{ allowed: boolean; remaining: number }> {
+  const limiter = getViewLimiter();
+  if (!limiter) {
+    const window = Math.floor(Date.now() / 60_000);
+    const record = demoViewLimitMap.get(identifier);
+    const count = record && record.window === window ? record.count : 0;
+    if (count >= VIEW_REQUESTS_PER_MINUTE) return { allowed: false, remaining: 0 };
+    demoViewLimitMap.set(identifier, { count: count + 1, window });
+    return { allowed: true, remaining: VIEW_REQUESTS_PER_MINUTE - count - 1 };
+  }
+  const result = await limiter.limit(identifier);
+  // A storage timeout must not silently permit unlimited traffic.
+  if (result.reason === "timeout") return { allowed: false, remaining: 0 };
+  return { allowed: result.success, remaining: Math.max(0, result.remaining) };
+}
+
+/**
+ * Records a view once per key and reports whether it was new. Backed by a Redis
+ * SET NX with TTL so refreshes and repeat visits inside the window are not counted
+ * twice; demo mode uses an in-memory map with the same expiry semantics.
+ */
+export async function claimView(
+  key: string,
+  ttlSeconds = VIEW_DEDUPE_TTL_SECONDS
+): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) {
+    const now = Date.now();
+    if (demoViewSeenMap.size > 5_000) {
+      for (const [seenKey, expiresAt] of demoViewSeenMap) {
+        if (expiresAt <= now) demoViewSeenMap.delete(seenKey);
+      }
+    }
+    const expiresAt = demoViewSeenMap.get(key);
+    if (expiresAt && expiresAt > now) return false;
+    demoViewSeenMap.set(key, now + ttlSeconds * 1000);
+    return true;
+  }
+
+  const claimed = await redis.set(key, "1", { nx: true, ex: ttlSeconds });
+  return claimed === "OK";
+}
+
 export async function limitDownloadRequests(
   identifier: string
 ): Promise<{ allowed: boolean; remaining: number }> {

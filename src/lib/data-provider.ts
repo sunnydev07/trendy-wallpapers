@@ -11,7 +11,13 @@ import type {
 } from "@/types/wallpaper";
 import { isDemoMode } from "./env";
 import { getR2PublicUrl } from "./r2";
-import { CATEGORIES, COLLECTIONS, getDemoWallpapers, RESOLUTIONS } from "./seed-data";
+import {
+  CATEGORIES,
+  COLLECTIONS,
+  getDemoWallpapers,
+  incrementDemoWallpaperViews,
+  RESOLUTIONS,
+} from "./seed-data";
 import { getSupabaseAdminClient, getSupabasePublicClient } from "./supabase";
 
 /**
@@ -238,6 +244,17 @@ export async function incrementDownloadCount(wallpaperId: string): Promise<void>
   const admin = getSupabaseAdminClient();
   if (!admin) return;
   await admin.rpc("increment_wallpaper_downloads", { row_id: wallpaperId });
+}
+
+export async function incrementViewCount(wallpaperId: string): Promise<void> {
+  if (isDemoMode()) {
+    incrementDemoWallpaperViews(wallpaperId);
+    return;
+  }
+
+  const admin = getSupabaseAdminClient();
+  if (!admin) return;
+  await admin.rpc("increment_wallpaper_views", { row_id: wallpaperId });
 }
 
 export function getAllCategories(): CategoryInfo[] {

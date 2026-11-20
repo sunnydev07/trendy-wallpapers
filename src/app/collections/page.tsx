@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getAllCollections, getCollectionBySlug } from "@/lib/data-provider";
 import { getSiteUrl } from "@/lib/env";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 export const metadata: Metadata = {
   title: "Curated Wallpaper Collections & Packs",
@@ -38,7 +39,7 @@ export default async function CollectionsIndexPage() {
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <header className="max-w-3xl">

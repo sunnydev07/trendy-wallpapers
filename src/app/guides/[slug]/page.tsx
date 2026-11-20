@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { AdSlot } from "@/components/AdSlot";
 import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
+import { serializeJsonLd } from "@/lib/json-ld";
 import { getAllGuides, getGuideBySlug } from "@/lib/guides";
 
 interface GuideArticlePageProps {
@@ -70,7 +71,7 @@ export default async function GuideArticlePage({ params }: GuideArticlePageProps
     <div className="mx-auto max-w-4xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <Link

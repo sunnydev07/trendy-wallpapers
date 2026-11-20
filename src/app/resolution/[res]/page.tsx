@@ -10,11 +10,12 @@ import {
   getResolutionBySlug,
   queryWallpapers,
 } from "@/lib/data-provider";
-import type { SortOption, SourceFilterValue } from "@/types/wallpaper";
+import type { DeviceType, SortOption, SourceFilterValue } from "@/types/wallpaper";
 
 interface ResolutionPageProps {
   params: Promise<{ res: string }>;
   searchParams: Promise<{
+    device?: string;
     source?: string;
     color?: string;
     textless?: string;
@@ -54,6 +55,7 @@ export default async function ResolutionPage({
 
   const wallpapers = await queryWallpapers({
     resolution: info.slug,
+    device: (query.device as DeviceType | "all") ?? "all",
     source: (query.source as SourceFilterValue) ?? "all",
     color: query.color || undefined,
     textless: query.textless === "1",

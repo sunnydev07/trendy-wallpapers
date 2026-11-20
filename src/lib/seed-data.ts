@@ -862,6 +862,7 @@ export const SEED_WALLPAPERS: Wallpaper[] = RAW_SEED_SPECS.map((spec, idx) =>
 // Persisted to disk in demo mode so generations survive dev restarts and HMR.
 const demoStoreGlobal = globalThis as typeof globalThis & {
   __trendyDemoWallpapers?: Wallpaper[];
+  __trendyDemoViewCounts?: Record<string, number>;
 };
 
 const DEMO_STORE_MAX = 200;
@@ -906,6 +907,12 @@ function persistDemoWallpapers(items: Wallpaper[]): void {
 const runtimeDemoWallpapers: Wallpaper[] = (demoStoreGlobal.__trendyDemoWallpapers ??=
   readPersistedDemoWallpapers());
 
+// View increments stay in memory: they change on every visit, so persisting them to disk
+// would rewrite the whole demo store per page view. globalThis keeps them visible across
+// the RSC and route-handler bundles.
+const demoViewCounts: Record<string, number> = (demoStoreGlobal.__trendyDemoViewCounts ??=
+  {});
+
 export function registerDemoWallpaper(wallpaper: Wallpaper): void {
   runtimeDemoWallpapers.unshift(wallpaper);
   if (runtimeDemoWallpapers.length > DEMO_STORE_MAX) {
@@ -914,8 +921,24 @@ export function registerDemoWallpaper(wallpaper: Wallpaper): void {
   persistDemoWallpapers(runtimeDemoWallpapers);
 }
 
+export function incrementDemoWallpaperViews(wallpaperId: string): void {
+  const exists =
+    runtimeDemoWallpapers.some((item) => item.id === wallpaperId) ||
+    CURATED_WALLPAPERS.some((item) => item.id === wallpaperId) ||
+    SEED_WALLPAPERS.some((item) => item.id === wallpaperId);
+  if (!exists) return;
+
+  demoViewCounts[wallpaperId] = (demoViewCounts[wallpaperId] ?? 0) + 1;
+}
+
 export function getDemoWallpapers(): Wallpaper[] {
-  return [...runtimeDemoWallpapers, ...CURATED_WALLPAPERS, ...SEED_WALLPAPERS];
+  const catalog = [...runtimeDemoWallpapers, ...CURATED_WALLPAPERS, ...SEED_WALLPAPERS];
+  return catalog.map((wallpaper) => {
+    const extraViews = demoViewCounts[wallpaper.id];
+    return extraViews
+      ? { ...wallpaper, views_count: wallpaper.views_count + extraViews }
+      : wallpaper;
+  });
 }
 
 const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".uploads");

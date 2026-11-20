@@ -6,6 +6,7 @@ import { AdSlot } from "@/components/AdSlot";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import { getAllCollections, getCollectionBySlug } from "@/lib/data-provider";
 import { getAdSenseSlotId, getSiteUrl } from "@/lib/env";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 interface CollectionPageProps {
   params: Promise<{ slug: string }>;
@@ -53,7 +54,7 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <header className="glass-surface rounded-3xl p-6 sm:p-10">
