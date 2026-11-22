@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ANON_DAILY_LIMIT,
   DOWNLOAD_RENDER_LIMIT,
   VIEW_REQUESTS_PER_MINUTE,
   claimView,
+  consumeAiQuota,
   limitDownloadRequests,
   limitViewRequests,
+  resetDemoQuotaForTests,
 } from "../src/lib/redis.ts";
 
 test("download render budget allows the limit then denies the next request", async () => {
@@ -41,4 +44,43 @@ test("distinct identifiers have independent budgets", async () => {
   for (let i = 0; i < DOWNLOAD_RENDER_LIMIT; i++) await limitDownloadRequests(a);
   assert.equal((await limitDownloadRequests(a)).allowed, false);
   assert.equal((await limitDownloadRequests(b)).allowed, true);
+});
+
+test("simultaneous last-slot reservations never exceed the daily limit", async () => {
+  resetDemoQuotaForTests();
+  const identifier = `quota-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const attempts = await Promise.all(
+    Array.from({ length: ANON_DAILY_LIMIT + 5 }, () => consumeAiQuota(identifier, false, 0.003))
+  );
+  assert.equal(attempts.filter((attempt) => attempt.allowed).length, ANON_DAILY_LIMIT);
+  assert.equal(
+    attempts.filter((attempt) => attempt.reason === "rate_limited").length,
+    attempts.length - ANON_DAILY_LIMIT
+  );
+  assert.equal(attempts.filter((attempt) => attempt.allowed)[0].quota.mode, "demo");
+});
+
+test("the daily budget denies generation before any slot is granted", async () => {
+  resetDemoQuotaForTests();
+  const original = process.env.DAILY_AI_BUDGET_USD;
+  process.env.DAILY_AI_BUDGET_USD = "0.0009"; // 90 units, below the 300-unit generation cost
+  try {
+    const result = await consumeAiQuota(`budget-${Date.now()}`, false, 0.003);
+    assert.equal(result.allowed, false);
+    assert.equal(result.reason, "budget_exhausted");
+    assert.equal(result.quota.remaining, ANON_DAILY_LIMIT);
+  } finally {
+    if (original === undefined) delete process.env.DAILY_AI_BUDGET_USD;
+    else process.env.DAILY_AI_BUDGET_USD = original;
+    resetDemoQuotaForTests();
+  }
+});
+
+test("an allowed reservation reports integer-unit spend as USD", async () => {
+  resetDemoQuotaForTests();
+  const identifier = `spend-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const result = await consumeAiQuota(identifier, false, 0.003);
+  assert.equal(result.allowed, true);
+  assert.equal(result.quota.dailySpentUsd, 0.003);
+  assert.equal(result.quota.remaining, ANON_DAILY_LIMIT - 1);
 });

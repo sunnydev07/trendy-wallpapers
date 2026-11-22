@@ -3,12 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { FilterBar } from "@/components/FilterBar";
+import { GalleryPagination } from "@/components/GalleryPagination";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import {
   getAllCategories,
   getCategoryBySlug,
   queryWallpapers,
 } from "@/lib/data-provider";
+import { getSiteUrl } from "@/lib/env";
 import type { DeviceType, SortOption, SourceFilterValue } from "@/types/wallpaper";
 
 interface CategoryPageProps {
@@ -20,7 +22,20 @@ interface CategoryPageProps {
     textless?: string;
     oled?: string;
     sort?: string;
+    page?: string;
   }>;
+}
+
+function hasFiltering(query: Awaited<CategoryPageProps["searchParams"]>): boolean {
+  return Boolean(
+    query.color ||
+      query.page ||
+      query.textless === "1" ||
+      query.oled === "1" ||
+      (query.device && query.device !== "all") ||
+      (query.source && query.source !== "all") ||
+      (query.sort && query.sort !== "popular")
+  );
 }
 
 export async function generateStaticParams() {
@@ -29,8 +44,10 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: CategoryPageProps): Promise<Metadata> {
   const { category: slug } = await params;
+  const query = await searchParams;
   const info = getCategoryBySlug(slug);
   if (!info) return { title: "Category Not Found" };
 
@@ -38,6 +55,8 @@ export async function generateMetadata({
     title: info.headline,
     description: info.description,
     keywords: info.keywords,
+    alternates: { canonical: `${getSiteUrl()}/category/${info.slug}` },
+    robots: hasFiltering(query) ? { index: false, follow: true } : undefined,
   };
 }
 
@@ -53,6 +72,8 @@ export default async function CategoryPage({
     notFound();
   }
 
+  const page = /^\d+$/.test(query.page ?? "") ? Number.parseInt(query.page!, 10) : 1;
+
   const wallpapers = await queryWallpapers({
     category: info.slug,
     device: (query.device as DeviceType | "all") ?? "all",
@@ -61,9 +82,13 @@ export default async function CategoryPage({
     textless: query.textless === "1",
     oled: query.oled === "1",
     sort: (query.sort as SortOption) ?? "popular",
+    page,
   });
 
   const allCategories = getAllCategories();
+  const currentQuery = new URLSearchParams(
+    Object.entries(query).filter(([, value]) => typeof value === "string" && value) as [string, string][]
+  ).toString();
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
@@ -112,7 +137,13 @@ export default async function CategoryPage({
       </div>
 
       <div className="mt-8">
-        <MasonryGrid wallpapers={wallpapers} showInFeedAds={true} />
+        <MasonryGrid wallpapers={wallpapers.items} showInFeedAds={true} />
+        <GalleryPagination
+          pathname={`/category/${info.slug}`}
+          page={wallpapers.page}
+          hasNextPage={wallpapers.hasNextPage}
+          query={currentQuery}
+        />
       </div>
     </div>
   );

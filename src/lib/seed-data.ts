@@ -890,15 +890,15 @@ function readPersistedDemoWallpapers(): Wallpaper[] {
   }
 }
 
-function persistDemoWallpapers(items: Wallpaper[]): void {
+async function persistDemoWallpapers(items: Wallpaper[]): Promise<void> {
   if (!isDemoMode()) return;
   try {
     const target = demoStorePath();
-    fs.mkdirSync(path.dirname(target), { recursive: true });
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
     // Atomic write: a crash mid-write must never leave a truncated JSON blob.
     const tmp = `${target}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(items.slice(0, DEMO_STORE_PERSIST_MAX)));
-    fs.renameSync(tmp, target);
+    await fs.promises.writeFile(tmp, JSON.stringify(items.slice(0, DEMO_STORE_PERSIST_MAX)));
+    await fs.promises.rename(tmp, target);
   } catch {
     // Demo persistence is best-effort; an unwritable cache must not break generation.
   }
@@ -913,22 +913,24 @@ const runtimeDemoWallpapers: Wallpaper[] = (demoStoreGlobal.__trendyDemoWallpape
 const demoViewCounts: Record<string, number> = (demoStoreGlobal.__trendyDemoViewCounts ??=
   {});
 
-export function registerDemoWallpaper(wallpaper: Wallpaper): void {
+export async function registerDemoWallpaper(wallpaper: Wallpaper): Promise<void> {
   runtimeDemoWallpapers.unshift(wallpaper);
   if (runtimeDemoWallpapers.length > DEMO_STORE_MAX) {
     runtimeDemoWallpapers.length = DEMO_STORE_MAX;
   }
-  persistDemoWallpapers(runtimeDemoWallpapers);
+  await persistDemoWallpapers(runtimeDemoWallpapers);
 }
 
-export function incrementDemoWallpaperViews(wallpaperId: string): void {
+/** Returns false when no published demo row matches, so the route cannot claim a count. */
+export function incrementDemoWallpaperViews(wallpaperId: string): boolean {
   const exists =
     runtimeDemoWallpapers.some((item) => item.id === wallpaperId) ||
     CURATED_WALLPAPERS.some((item) => item.id === wallpaperId) ||
     SEED_WALLPAPERS.some((item) => item.id === wallpaperId);
-  if (!exists) return;
+  if (!exists) return false;
 
   demoViewCounts[wallpaperId] = (demoViewCounts[wallpaperId] ?? 0) + 1;
+  return true;
 }
 
 export function getDemoWallpapers(): Wallpaper[] {
@@ -941,46 +943,75 @@ export function getDemoWallpapers(): Wallpaper[] {
   });
 }
 
-const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".uploads");
 const CURATED_ORIGINALS_DIR = path.join(process.cwd(), "public", "curated", "originals");
 
+/** Overridable so isolated tests never write the developer's real upload folder. */
+function uploadRoot(): string {
+  return process.env.DEMO_UPLOAD_DIR?.trim() || path.join(process.cwd(), ".uploads");
+}
+
 /** Reads a source-controlled curated original (path-traversal-safe). */
-export function readCuratedOriginal(originalKey: string): Buffer | null {
+export async function readCuratedOriginal(originalKey: string): Promise<Buffer | null> {
   const name = path.basename(originalKey);
   if (!/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return null;
   try {
-    return fs.readFileSync(path.join(CURATED_ORIGINALS_DIR, name));
+    return await fs.promises.readFile(path.join(CURATED_ORIGINALS_DIR, name));
   } catch {
     return null;
   }
 }
 
-/** Demo-mode storage for real uploaded artwork so it is viewable without R2. */
-export function saveLocalUpload(
+/**
+ * Demo-mode storage for real uploaded artwork so it is viewable without R2.
+ * Originals and thumbnails live in separate directories: a WebP original and its
+ * WebP thumbnail must never share a filename.
+ */
+export async function saveLocalUpload(
   slug: string,
   extension: "jpg" | "png" | "webp",
   original: Buffer,
   thumb: Buffer
-): { originalKey: string; thumbKey: string } {
+): Promise<{ originalKey: string; thumbKey: string }> {
   if (!isDemoMode()) throw new Error("Local upload storage is only used in demo mode.");
   const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
-  fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
-  fs.writeFileSync(path.join(LOCAL_UPLOAD_DIR, `${safeSlug}.${extension}`), original);
-  fs.writeFileSync(path.join(LOCAL_UPLOAD_DIR, `${safeSlug}.webp`), thumb);
+  const root = uploadRoot();
+  const originalsDir = path.join(root, "originals");
+  const thumbsDir = path.join(root, "thumbs");
+  await Promise.all([
+    fs.promises.mkdir(originalsDir, { recursive: true }),
+    fs.promises.mkdir(thumbsDir, { recursive: true }),
+  ]);
+  await Promise.all([
+    fs.promises.writeFile(path.join(originalsDir, `${safeSlug}.${extension}`), original),
+    fs.promises.writeFile(path.join(thumbsDir, `${safeSlug}.webp`), thumb),
+  ]);
   return {
     originalKey: `originals/${safeSlug}.${extension}`,
     thumbKey: `thumbs/${safeSlug}.webp`,
   };
 }
 
-/** Resolves an original key against locally stored demo uploads. */
-export function readLocalUpload(originalKey: string): Buffer | null {
+/**
+ * Resolves an original/thumbnail key against locally stored demo uploads. Prefixed
+ * directories are authoritative; the flat root is a read-only compatibility path for
+ * uploads written before the layout split.
+ */
+export async function readLocalUpload(originalKey: string): Promise<Buffer | null> {
   const name = path.basename(originalKey);
-  try {
-    return fs.readFileSync(path.join(LOCAL_UPLOAD_DIR, name));
-  } catch {
-    return null;
+  if (!/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return null;
+  const prefix = originalKey.replace(/^\/+/, "").split("/")[0];
+  const root = uploadRoot();
+  const candidates = prefix === "originals" || prefix === "thumbs"
+    ? [path.join(root, prefix, name), path.join(root, name)]
+    : [path.join(root, name)];
+  for (const candidate of candidates) {
+    try {
+      return await fs.promises.readFile(candidate);
+    } catch {
+      // Try the next layout candidate.
+    }
   }
+  return null;
 }
 
 const demoSvgCache = new Map<string, string>();

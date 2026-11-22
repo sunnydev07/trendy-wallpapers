@@ -18,8 +18,8 @@ import { MasonryGrid } from "@/components/MasonryGrid";
 import { SmartDownloadPanel } from "@/components/SmartDownloadPanel";
 import { ViewCount } from "@/components/ViewCount";
 import {
-  getAllPublishedWallpaperSlugs,
   getCategoryBySlug,
+  getPopularWallpaperSlugs,
   getRelatedWallpapers,
   getWallpaperBySlug,
 } from "@/lib/data-provider";
@@ -31,7 +31,8 @@ interface WallpaperDetailPageProps {
 }
 
 export async function generateStaticParams() {
-  const slugs = await getAllPublishedWallpaperSlugs();
+  // Prebuild only a bounded popular subset; every other published slug stays dynamic.
+  const slugs = await getPopularWallpaperSlugs(100);
   return slugs.map((item) => ({ slug: item.slug }));
 }
 
@@ -47,6 +48,7 @@ export async function generateMetadata({
   return {
     title: `${wallpaper.title} (${wallpaper.width}×${wallpaper.height} ${wallpaper.aspect_ratio})`,
     description: wallpaper.description.slice(0, 160),
+    alternates: { canonical: `/wallpaper/${wallpaper.slug}` },
     openGraph: {
       title: `${wallpaper.title} — Free ${wallpaper.aspect_ratio} Wallpaper`,
       description: wallpaper.description.slice(0, 160),

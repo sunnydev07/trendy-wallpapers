@@ -8,8 +8,10 @@ import type { Wallpaper } from "@/types/wallpaper";
 type PreviewMode = "raw" | "phone" | "desktop";
 
 interface DevicePreviewStageProps {
-  wallpaper: Wallpaper;
+  wallpaper: Pick<Wallpaper, "title" | "preview_url" | "width" | "height" | "aspect_ratio">;
 }
+
+type PreviewWallpaper = DevicePreviewStageProps["wallpaper"];
 
 function StageImage({
   wallpaper,
@@ -17,7 +19,7 @@ function StageImage({
   contain = false,
   priority = false,
 }: {
-  wallpaper: Wallpaper;
+  wallpaper: PreviewWallpaper;
   alt: string;
   contain?: boolean;
   priority?: boolean;

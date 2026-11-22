@@ -49,6 +49,8 @@ export function updateFilterQuery(
   } else {
     next.set(key, value);
   }
+  // Any changed filter/search/sort invalidates the current result page.
+  if (key !== "page") next.delete("page");
   return next.toString();
 }
 
@@ -89,7 +91,9 @@ export function FilterBar() {
     Boolean(currentColor) ||
     currentTextless ||
     currentOled ||
-    Boolean(activeParams.get("q"));
+    currentSort !== "popular" ||
+    Boolean(activeParams.get("q")) ||
+    Boolean(activeParams.get("page"));
 
   const navigate = useCallback(
     (nextQuery: string) => {

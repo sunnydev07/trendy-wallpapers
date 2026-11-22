@@ -3,14 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import {
-  isFalConfigured,
-  isR2Configured,
-  isSupabaseAdminConfigured,
+  hasPartialPaidConfiguration,
+  isPaidGenerationReady,
 } from "@/lib/env";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import {
+  ImageTooLargeError,
+  MAX_IMAGE_BYTES,
+  computeAspectRatioLabel,
+  contentTypeForFormat,
   generateThumbnailBuffer,
+  inspectImageMetadata,
   inspectWallpaperBuffer,
+  normalizeStoredFormat,
   processSmartDownload,
+  readBoundedBody,
+  type DecodedImageMetadata,
 } from "@/lib/image-processing";
 import {
   composeWallpaperPrompt,
@@ -36,6 +44,11 @@ import {
 import type { DeviceType, Wallpaper } from "@/types/wallpaper";
 
 export const runtime = "nodejs";
+
+/** Below the 90-second client deadline, with margin for response handling. */
+const REQUEST_BUDGET_MS = 80_000;
+const PROVIDER_BUDGET_MS = 60_000;
+const DOWNLOAD_BUDGET_MS = 30_000;
 
 const MODEL_MAP = {
   "flux-schnell": {
@@ -102,7 +115,7 @@ function slugifyPrompt(prompt: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
-  const suffix = Date.now().toString(36).slice(-5);
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   return `${base || "ai-wallpaper"}-${suffix}`;
 }
 
@@ -167,21 +180,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** Bounds any upstream promise so a stalled provider can never hang the request. */
-async function withDeadline<T>(work: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      work,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`${label} timed out.`)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 async function handleGeneration(request: NextRequest) {
   let parsedBody: z.infer<typeof GenerateBodySchema>;
   try {
@@ -203,12 +201,24 @@ async function handleGeneration(request: NextRequest) {
     );
   }
 
+  // Paid generation needs the entire write/queue/budget pipeline. Partial configuration
+  // is an attempted live deployment: pause before spending quota or dispatching work.
+  const liveReady = isPaidGenerationReady();
+  if (!liveReady && hasPartialPaidConfiguration()) {
+    return NextResponse.json(
+      {
+        error:
+          "AI generation is temporarily unavailable because the live service configuration is incomplete.",
+        code: "SERVICE_UNAVAILABLE",
+      },
+      { status: 503 }
+    );
+  }
+
   const identity = await resolveRequesterIdentity(request);
   const modelConfig = MODEL_MAP[parsedBody.modelKey];
-  // Live generation needs the complete pipeline; check before spending any quota.
-  const liveReady = isFalConfigured() && isR2Configured() && isSupabaseAdminConfigured();
 
-  // 2. Hard daily USD spend cap + Redis rate limit (2/day guest, 5/day authed)
+  // 2. Atomic daily budget + per-identity slot reservation
   const quotaCheck = await consumeAiQuota(
     identity.identifier,
     identity.isAuthenticated,
@@ -264,60 +274,98 @@ async function handleGeneration(request: NextRequest) {
 
   // 3. Live Fal.ai + R2 + Supabase SEO Flywheel
   if (liveReady) {
+    const controller = new AbortController();
+    const deadlineTimer = setTimeout(
+      () => controller.abort(new DOMException("Generation deadline exceeded.", "TimeoutError")),
+      REQUEST_BUDGET_MS
+    );
+    let dispatched = false;
+    let providerRequestId: string | null = null;
+
     try {
       fal.config({ credentials: process.env.FAL_KEY! });
 
-      const falResult = (await withDeadline(
-        fal.subscribe(modelConfig.falId, {
-          input: {
-            prompt: finalPrompt,
-            image_size: dims.falSize,
-            num_inference_steps: 4,
-            num_images: 1,
-            enable_safety_checker: true,
-          },
-        }),
-        60_000,
-        "Fal.ai generation"
-      )) as { data?: { images?: { url: string; width?: number; height?: number }[] } };
+      dispatched = true;
+      const falResult = (await fal.subscribe(modelConfig.falId, {
+        input: {
+          prompt: finalPrompt,
+          image_size: dims.falSize,
+          num_inference_steps: 4,
+          num_images: 1,
+          enable_safety_checker: true,
+        },
+        abortSignal: controller.signal,
+        timeout: PROVIDER_BUDGET_MS,
+        onEnqueue: (requestId) => {
+          providerRequestId = requestId;
+        },
+      })) as { data?: { images?: { url: string; width?: number; height?: number }[] } };
 
       const imageUrl = falResult?.data?.images?.[0]?.url;
       if (!imageUrl) {
         throw new Error("Fal.ai returned no image URL.");
       }
 
-      const fetched = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) });
+      if (controller.signal.aborted) throw new Error("Generation deadline exceeded.");
+
+      const fetched = await fetchWithTimeout(imageUrl, { signal: controller.signal }, DOWNLOAD_BUDGET_MS);
       if (!fetched.ok) {
         throw new Error("Failed to download generated artwork from Fal.ai.");
       }
 
-      // Fal renders 16:9 for ultrawide presets; crop to the advertised ratio before storing.
-      const downloaded = Buffer.from(await fetched.arrayBuffer());
-      const preliminary = await inspectWallpaperBuffer(downloaded);
-      let originalBuffer: Buffer = downloaded;
-      if (Math.abs(preliminary.width / preliminary.height - dims.width / dims.height) > 0.01) {
-        originalBuffer = (
-          await processSmartDownload(downloaded, {
-            width: dims.width,
-            height: dims.height,
-            format: "png",
-            fit: "cover",
-            quality: 100,
-          })
-        ).buffer;
+      const downloaded = await readBoundedBody(fetched, MAX_IMAGE_BYTES, controller.signal);
+      const downloadedMeta = await inspectImageMetadata(downloaded);
+      const decodedFormat = normalizeStoredFormat(downloadedMeta.format);
+      if (!decodedFormat) {
+        throw new Error(`Provider returned an unsupported image format: ${downloadedMeta.format}.`);
       }
 
+      // Fal renders 16:9 for ultrawide presets; crop to the advertised ratio before storing.
+      let originalBuffer: Buffer = downloaded;
+      let originalFormat = decodedFormat;
+      let finalMeta: DecodedImageMetadata = downloadedMeta;
+      if (Math.abs(downloadedMeta.width / downloadedMeta.height - dims.width / dims.height) > 0.01) {
+        const cropped = await processSmartDownload(downloaded, {
+          width: dims.width,
+          height: dims.height,
+          format: "png",
+          fit: "cover",
+          quality: 100,
+        });
+        originalBuffer = cropped.buffer;
+        originalFormat = "png";
+        finalMeta = {
+          width: cropped.width,
+          height: cropped.height,
+          aspectRatio: computeAspectRatioLabel(cropped.width, cropped.height),
+          format: "png",
+        };
+      }
+
+      // One metadata decode for the crop decision and one color analysis pass on the
+      // final stored bytes; the thumbnail job stays a single Sharp render.
       const [meta, thumbBuffer] = await Promise.all([
-        inspectWallpaperBuffer(originalBuffer),
+        inspectWallpaperBuffer(originalBuffer, { metadata: finalMeta }),
         generateThumbnailBuffer(originalBuffer, 480),
       ]);
 
-      const r2OriginalKey = `originals/ai/${slug}.png`;
-      const r2ThumbKey = `thumbs/ai/${slug}.webp`;
+      const assetSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+      const r2OriginalKey = `originals/ai/${slug}-${assetSuffix}.${originalFormat}`;
+      const r2ThumbKey = `thumbs/ai/${slug}-${assetSuffix}.webp`;
 
       await Promise.all([
-        uploadToR2({ key: r2OriginalKey, body: originalBuffer, contentType: "image/png" }),
-        uploadToR2({ key: r2ThumbKey, body: thumbBuffer, contentType: "image/webp" }),
+        uploadToR2({
+          key: r2OriginalKey,
+          body: originalBuffer,
+          contentType: contentTypeForFormat(originalFormat),
+          signal: controller.signal,
+        }),
+        uploadToR2({
+          key: r2ThumbKey,
+          body: thumbBuffer,
+          contentType: "image/webp",
+          signal: controller.signal,
+        }),
       ]);
 
       const description = buildSeoDescription(
@@ -409,18 +457,22 @@ async function handleGeneration(request: NextRequest) {
       revalidateTag("wallpapers");
 
       // The generation ledger is audit data; the wallpaper row is already committed.
-      await Promise.resolve(
-        admin.from("ai_generations").insert({
-          user_id: identity.userId,
-          ip_hash: identity.ipHash,
-          prompt: safety.sanitizedPrompt,
-          style_preset: preset.id,
-          aspect_ratio: parsedBody.aspectRatio,
-          model_used: modelConfig.falId,
-          cost_usd: modelConfig.costUsd,
-          wallpaper_id: inserted.id,
-        })
-      ).catch(() => undefined);
+      // Supabase reports operation failures through `error`, not only rejections.
+      const { error: ledgerError } = await admin.from("ai_generations").insert({
+        user_id: identity.userId,
+        ip_hash: identity.ipHash,
+        prompt: safety.sanitizedPrompt,
+        style_preset: preset.id,
+        aspect_ratio: parsedBody.aspectRatio,
+        model_used: modelConfig.falId,
+        cost_usd: modelConfig.costUsd,
+        wallpaper_id: inserted.id,
+      });
+      if (ledgerError) {
+        console.warn(
+          `AI generation ledger write failed for ${providerRequestId ?? "unknown request"}: ${ledgerError.message}`
+        );
+      }
 
       return NextResponse.json({
         wallpaper: savedWallpaper,
@@ -430,9 +482,34 @@ async function handleGeneration(request: NextRequest) {
         mode: "live",
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "AI generation service error.";
+      const aborted =
+        controller.signal.aborted ||
+        (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"));
+
+      if (aborted) {
+        return NextResponse.json(
+          {
+            error: dispatched
+              ? "Generation timed out after dispatch. It may still complete and consume quota; check your quota before retrying."
+              : "Generation timed out before the provider was dispatched.",
+            code: dispatched ? "GENERATION_STATUS_UNKNOWN" : "GENERATION_TIMEOUT",
+            requestId: providerRequestId,
+          },
+          { status: 504 }
+        );
+      }
+
+      if (err instanceof ImageTooLargeError) {
+        return NextResponse.json(
+          { error: "Generated artwork exceeded the supported image size.", code: "UPSTREAM_TOO_LARGE" },
+          { status: 502 }
+        );
+      }
+
+      const message = err instanceof Error ? err.message : "AI generation service error.";
       return NextResponse.json({ error: message }, { status: 502 });
+    } finally {
+      clearTimeout(deadlineTimer);
     }
   }
 
@@ -509,7 +586,7 @@ async function handleGeneration(request: NextRequest) {
     created_at: new Date().toISOString(),
   };
 
-  registerDemoWallpaper(demoWallpaper);
+  await registerDemoWallpaper(demoWallpaper);
 
   return NextResponse.json({
     wallpaper: demoWallpaper,

@@ -23,9 +23,9 @@ function findGridWallpapers(node) {
 test("resolution pages forward the device filter to the wallpaper grid", async () => {
   let fixture = null;
   for (const resolution of getAllResolutions()) {
-    const all = await queryWallpapers({ resolution: resolution.slug });
+    const all = (await queryWallpapers({ resolution: resolution.slug })).items;
     for (const device of DEVICES) {
-      const filtered = await queryWallpapers({ resolution: resolution.slug, device });
+      const filtered = (await queryWallpapers({ resolution: resolution.slug, device })).items;
       if (filtered.length > 0 && filtered.length < all.length) {
         fixture = { resolution, device, all, filtered };
         break;

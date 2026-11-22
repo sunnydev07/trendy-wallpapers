@@ -47,3 +47,19 @@ test("edits can start from reset or history-restored URL state", () => {
   assert.equal(updateFilterQuery("", "device", "desktop"), "device=desktop");
   assert.equal(updateFilterQuery("source=human&sort=views", "device", "mobile"), "source=human&sort=views&device=mobile");
 });
+
+test("changing a filter or sort clears the current page", () => {
+  assert.equal(
+    new URLSearchParams(updateFilterQuery("page=3&source=ai", "device", "mobile")).has("page"),
+    false
+  );
+  assert.equal(
+    new URLSearchParams(updateFilterQuery("page=3&device=mobile", "sort", "views")).has("page"),
+    false
+  );
+  assert.equal(
+    new URLSearchParams(updateFilterQuery("page=3&device=mobile", "q", "neon")).has("page"),
+    false
+  );
+  assert.equal(updateFilterQuery("page=3", "page", "2"), "page=2");
+});

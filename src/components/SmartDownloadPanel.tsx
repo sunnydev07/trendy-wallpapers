@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { DownloadFormatOption, Wallpaper } from "@/types/wallpaper";
 
 interface SmartDownloadPanelProps {
-  wallpaper: Wallpaper;
+  wallpaper: Pick<Wallpaper, "slug" | "width" | "height">;
 }
 
 const FORMAT_OPTIONS: DownloadFormatOption[] = [
@@ -22,11 +22,24 @@ const QUICK_PRESETS = [
 ];
 
 const MIN_DIMENSION = 320;
+const MAX_SIDE = 7680;
+const MAX_OUTPUT_PIXELS = 7680 * 4320;
 
 function parseDimension(raw: string, max: number): number | null {
   if (!/^\d+$/.test(raw.trim())) return null;
   const value = Number.parseInt(raw, 10);
   return value >= MIN_DIMENSION && value <= max ? value : null;
+}
+
+/** Mirrors the server's output ceiling so the UI never offers a URL the API rejects. */
+function isSupportedGeometry(width: number, height: number): boolean {
+  return (
+    width >= MIN_DIMENSION &&
+    height >= MIN_DIMENSION &&
+    width <= MAX_SIDE &&
+    height <= MAX_SIDE &&
+    width * height <= MAX_OUTPUT_PIXELS
+  );
 }
 
 export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
@@ -36,6 +49,7 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
     h: number;
     isMobile: boolean;
   } | null>(null);
+  const [oversizedScreen, setOversizedScreen] = useState(false);
 
   const [format, setFormat] = useState<"webp" | "png" | "jpg">("webp");
   const [customWidth, setCustomWidth] = useState(String(wallpaper.width));
@@ -48,9 +62,15 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
       const dpr = Math.min(window.devicePixelRatio || 1, 3);
       const w = Math.round(window.screen.width * dpr);
       const h = Math.round(window.screen.height * dpr);
-      if (w >= MIN_DIMENSION && h >= MIN_DIMENSION) {
-        setDetectedScreen({ w, h, isMobile: h > w });
+      if (w < MIN_DIMENSION || h < MIN_DIMENSION) return;
+      if (!isSupportedGeometry(w, h)) {
+        // Never present an Auto-Fit link that the download API must reject.
+        setDetectedScreen(null);
+        setOversizedScreen(true);
+        return;
       }
+      setOversizedScreen(false);
+      setDetectedScreen({ w, h, isMobile: h > w });
     };
     detect();
     window.addEventListener("resize", detect);
@@ -72,9 +92,12 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
     return `/api/download?${params.toString()}`;
   };
 
-  const parsedWidth = parseDimension(customWidth, 7680);
-  const parsedHeight = parseDimension(customHeight, 4320);
-  const customValid = parsedWidth !== null && parsedHeight !== null;
+  const parsedWidth = parseDimension(customWidth, MAX_SIDE);
+  const parsedHeight = parseDimension(customHeight, MAX_SIDE);
+  const customValid =
+    parsedWidth !== null &&
+    parsedHeight !== null &&
+    parsedWidth * parsedHeight <= MAX_OUTPUT_PIXELS;
 
   return (
     <div className="rounded-3xl border border-white/[0.08] bg-[#12151E]/90 p-5 sm:p-6">
@@ -127,6 +150,12 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
 
         {/* Space is reserved before detection so the panel never shifts after hydration. */}
         <div className="min-h-[46px]">
+          {oversizedScreen && !detectedScreen && (
+            <p className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+              This screen exceeds the 7,680 px / 33.2 MP export limit. Use a preset or a
+              custom resolution instead.
+            </p>
+          )}
           {detectedScreen && (
             <a
               href={buildDownloadUrl(detectedScreen.w, detectedScreen.h)}
@@ -252,7 +281,8 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
               </a>
             ) : (
               <p className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-3 py-2 text-center text-[11px] font-medium text-amber-200">
-                Enter whole numbers between {MIN_DIMENSION} and 7680 (width) / 4320 (height).
+                Enter whole numbers between {MIN_DIMENSION} and {MAX_SIDE} per side, up to
+                33.2 megapixels total.
               </p>
             )}
           </div>

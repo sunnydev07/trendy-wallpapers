@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { getAdminUploadSecret, isDemoMode, isR2Configured, isSupabaseAdminConfigured } from "@/lib/env";
+import { BoundedBodyError, readBoundedStream } from "@/lib/fetch-with-timeout";
 import {
+  ImageTooLargeError,
+  MAX_IMAGE_BYTES,
+  MAX_MULTIPART_BYTES,
+  contentTypeForFormat,
   generateThumbnailBuffer,
   inspectWallpaperBuffer,
+  normalizeStoredFormat,
 } from "@/lib/image-processing";
 import { uploadToR2 } from "@/lib/r2";
 import { registerDemoWallpaper, saveLocalUpload } from "@/lib/seed-data";
@@ -12,12 +18,7 @@ import type { DeviceType, WallpaperSourceType } from "@/types/wallpaper";
 
 export const runtime = "nodejs";
 
-const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES: Record<string, "jpg" | "png" | "webp"> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function slugify(value: string): string {
   return value
@@ -32,6 +33,34 @@ function inferDeviceTypes(width: number, height: number): DeviceType[] {
   if (ratio < 0.85) return ["mobile"];
   if (ratio >= 2.1) return ["ultrawide", "desktop"];
   return ["desktop"];
+}
+
+/**
+ * Reads the multipart body through a bounded stream before parsing. An honest or
+ * dishonest Content-Length cannot make the route buffer more than 45 MiB.
+ */
+async function parseBoundedFormData(request: NextRequest): Promise<FormData> {
+  const declared = Number(request.headers.get("content-length") ?? Number.NaN);
+  if (Number.isFinite(declared) && declared > MAX_MULTIPART_BYTES) {
+    throw new ImageTooLargeError("Upload exceeds the 45 MB request limit.");
+  }
+
+  const contentType = request.headers.get("content-type") ?? "";
+  let body: Buffer;
+  try {
+    body = await readBoundedStream(request.body, MAX_MULTIPART_BYTES);
+  } catch (error) {
+    if (error instanceof BoundedBodyError) {
+      throw new ImageTooLargeError("Upload exceeds the 45 MB request limit.");
+    }
+    throw error;
+  }
+
+  return new Request(request.url, {
+    method: "POST",
+    headers: { "content-type": contentType },
+    body: new Uint8Array(body),
+  }).formData();
 }
 
 export async function POST(request: NextRequest) {
@@ -55,17 +84,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized upload request." }, { status: 401 });
   }
 
-  // Reject oversized bodies before buffering anything into memory.
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_UPLOAD_BYTES + 5 * 1024 * 1024) {
-    return NextResponse.json(
-      { error: "Upload exceeds the 40 MB limit." },
-      { status: 413, headers: { "Cache-Control": "no-store" } }
-    );
-  }
-
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await parseBoundedFormData(request);
+    } catch (error) {
+      if (error instanceof ImageTooLargeError) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 413, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      return NextResponse.json({ error: "Invalid multipart upload body." }, { status: 400 });
+    }
+
     const file = formData.get("file");
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
@@ -110,23 +142,22 @@ export async function POST(request: NextRequest) {
       ? (sourceTypeRaw as WallpaperSourceType)
       : "original";
 
-    const originalExt = ALLOWED_IMAGE_TYPES[file.type];
-    if (!originalExt) {
+    // Declared MIME is an early allowlist check only; the decoded bytes decide identity.
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       return NextResponse.json(
         { error: "Only JPEG, PNG or WebP images are accepted." },
         { status: 415, headers: { "Cache-Control": "no-store" } }
       );
     }
 
-    if (file.size > MAX_UPLOAD_BYTES) {
+    if (file.size > MAX_IMAGE_BYTES) {
       return NextResponse.json(
         { error: "Image exceeds the 40 MB limit." },
         { status: 413, headers: { "Cache-Control": "no-store" } }
       );
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const originalBuffer = Buffer.from(arrayBuffer);
+    const originalBuffer = Buffer.from(await file.arrayBuffer());
 
     let metadata: Awaited<ReturnType<typeof inspectWallpaperBuffer>>;
     let thumbBuffer: Buffer;
@@ -140,7 +171,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Invalid image file: ${message}` }, { status: 400 });
     }
 
-    const slug = `${slugify(title)}-${Date.now().toString(36).slice(-4)}`;
+    const originalExt = normalizeStoredFormat(metadata.format);
+    if (!originalExt) {
+      return NextResponse.json(
+        { error: `Unsupported decoded image format: ${metadata.format}.` },
+        { status: 415, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    const slug = `${slugify(title)}-${crypto.randomUUID().slice(0, 8)}`;
     const tags = tagsRaw
       .split(",")
       .map((t) => t.trim().toLowerCase())
@@ -149,13 +188,14 @@ export async function POST(request: NextRequest) {
 
     const r2OriginalKey = `originals/${slug}.${originalExt}`;
     const r2ThumbKey = `thumbs/${slug}.webp`;
+    const originalContentType = contentTypeForFormat(originalExt);
 
     if (isR2Configured()) {
       await Promise.all([
         uploadToR2({
           key: r2OriginalKey,
           body: originalBuffer,
-          contentType: file.type || "image/png",
+          contentType: originalContentType,
         }),
         uploadToR2({
           key: r2ThumbKey,
@@ -208,11 +248,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (isDemoMode()) {
-      const extension = originalExt === "jpg" ? "jpg" : "png";
-      const stored = saveLocalUpload(slug, extension, originalBuffer, thumbBuffer);
+      const stored = await saveLocalUpload(slug, originalExt, originalBuffer, thumbBuffer);
       const created = new Date().toISOString();
 
-      registerDemoWallpaper({
+      await registerDemoWallpaper({
         id: crypto.randomUUID(),
         slug,
         title,

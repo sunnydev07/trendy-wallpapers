@@ -46,7 +46,16 @@ export interface WallpaperFilters {
   textless?: boolean;
   oled?: boolean;
   sort?: SortOption;
+  /** 1-based gallery page. */
+  page?: number;
+  /** Bounded result size for internal queries such as related wallpapers. */
   limit?: number;
+}
+
+export interface WallpaperQueryResult {
+  items: Wallpaper[];
+  page: number;
+  hasNextPage: boolean;
 }
 
 export interface CategoryInfo {

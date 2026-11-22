@@ -4,12 +4,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { FilterBar } from "@/components/FilterBar";
+import { GalleryPagination } from "@/components/GalleryPagination";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import {
   getAllResolutions,
   getResolutionBySlug,
   queryWallpapers,
 } from "@/lib/data-provider";
+import { getSiteUrl } from "@/lib/env";
 import type { DeviceType, SortOption, SourceFilterValue } from "@/types/wallpaper";
 
 interface ResolutionPageProps {
@@ -21,7 +23,20 @@ interface ResolutionPageProps {
     textless?: string;
     oled?: string;
     sort?: string;
+    page?: string;
   }>;
+}
+
+function hasFiltering(query: Awaited<ResolutionPageProps["searchParams"]>): boolean {
+  return Boolean(
+    query.color ||
+      query.page ||
+      query.textless === "1" ||
+      query.oled === "1" ||
+      (query.device && query.device !== "all") ||
+      (query.source && query.source !== "all") ||
+      (query.sort && query.sort !== "popular")
+  );
 }
 
 export async function generateStaticParams() {
@@ -30,14 +45,18 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: ResolutionPageProps): Promise<Metadata> {
   const { res } = await params;
+  const query = await searchParams;
   const info = getResolutionBySlug(res);
   if (!info) return { title: "Resolution Not Found" };
 
   return {
     title: info.headline,
     description: info.description,
+    alternates: { canonical: `${getSiteUrl()}/resolution/${info.slug}` },
+    robots: hasFiltering(query) ? { index: false, follow: true } : undefined,
   };
 }
 
@@ -53,6 +72,8 @@ export default async function ResolutionPage({
     notFound();
   }
 
+  const page = /^\d+$/.test(query.page ?? "") ? Number.parseInt(query.page!, 10) : 1;
+
   const wallpapers = await queryWallpapers({
     resolution: info.slug,
     device: (query.device as DeviceType | "all") ?? "all",
@@ -61,9 +82,13 @@ export default async function ResolutionPage({
     textless: query.textless === "1",
     oled: query.oled === "1",
     sort: (query.sort as SortOption) ?? "popular",
+    page,
   });
 
   const allResolutions = getAllResolutions();
+  const currentQuery = new URLSearchParams(
+    Object.entries(query).filter(([, value]) => typeof value === "string" && value) as [string, string][]
+  ).toString();
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
@@ -113,7 +138,13 @@ export default async function ResolutionPage({
       </div>
 
       <div className="mt-8">
-        <MasonryGrid wallpapers={wallpapers} showInFeedAds={true} />
+        <MasonryGrid wallpapers={wallpapers.items} showInFeedAds={true} />
+        <GalleryPagination
+          pathname={`/resolution/${info.slug}`}
+          page={wallpapers.page}
+          hasNextPage={wallpapers.hasNextPage}
+          query={currentQuery}
+        />
       </div>
     </div>
   );

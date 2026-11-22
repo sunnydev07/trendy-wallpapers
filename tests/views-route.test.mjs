@@ -49,6 +49,22 @@ test("views endpoint counts each distinct visitor separately", async () => {
   assert.equal(demoViews(), before + 2);
 });
 
+test("views endpoint never claims a count for unknown or invalid records", async () => {
+  const before = demoViews();
+
+  const unknown = await beacon({ id: `unknown-${Date.now()}`, visitorId: uniqueVisitorId() });
+  assert.equal(unknown.status, 200);
+  assert.deepEqual(await unknown.json(), { counted: false });
+
+  const oversized = await beacon({ id: "x".repeat(200), visitorId: uniqueVisitorId() });
+  assert.equal(oversized.status, 400);
+
+  const padded = await beacon({ id: "has spaces", visitorId: uniqueVisitorId() });
+  assert.equal(padded.status, 400);
+
+  assert.equal(demoViews(), before);
+});
+
 test("views endpoint rejects malformed requests without counting", async () => {
   const before = demoViews();
 

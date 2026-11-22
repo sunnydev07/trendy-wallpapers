@@ -1,7 +1,9 @@
 import { ArrowRight, Layers, Search, Sparkles } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { FilterBar } from "@/components/FilterBar";
+import { GalleryPagination } from "@/components/GalleryPagination";
 import { MasonryGrid } from "@/components/MasonryGrid";
 import {
   getAllCategories,
@@ -9,6 +11,7 @@ import {
   getAllResolutions,
   queryWallpapers,
 } from "@/lib/data-provider";
+import { getSiteUrl } from "@/lib/env";
 import type { DeviceType, SortOption, SourceFilterValue } from "@/types/wallpaper";
 
 interface HomePageProps {
@@ -20,12 +23,47 @@ interface HomePageProps {
     textless?: string;
     oled?: string;
     sort?: string;
+    page?: string;
   }>;
+}
+
+type HomeSearchParams = Awaited<HomePageProps["searchParams"]>;
+
+function hasFiltering(params: HomeSearchParams): boolean {
+  return Boolean(
+    params.q ||
+      params.color ||
+      params.page ||
+      params.textless === "1" ||
+      params.oled === "1" ||
+      (params.device && params.device !== "all") ||
+      (params.source && params.source !== "all") ||
+      (params.sort && params.sort !== "popular")
+  );
+}
+
+function queryStringOf(params: HomeSearchParams): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string" && value) search.set(key, value);
+  }
+  return search.toString();
+}
+
+export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const siteUrl = getSiteUrl();
+  return {
+    alternates: { canonical: `${siteUrl}/` },
+    // Arbitrary search/filter combinations must not create crawlable near-duplicates.
+    robots: hasFiltering(params) ? { index: false, follow: true } : undefined,
+  };
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
+  const page = /^\d+$/.test(params.page ?? "") ? Number.parseInt(params.page!, 10) : 1;
 
   const wallpapers = await queryWallpapers({
     q: q || undefined,
@@ -35,6 +73,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     textless: params.textless === "1",
     oled: params.oled === "1",
     sort: (params.sort as SortOption) ?? "popular",
+    page,
   });
 
   const resolutions = getAllResolutions();
@@ -71,10 +110,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               type="search"
               name="q"
               defaultValue={q}
+              maxLength={200}
               placeholder="Search Vice City, 3440x1440, OLED, cyberpunk, aurora..."
               aria-label="Search wallpapers"
               className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
             />
+            {/* Submitting a search keeps every active filter instead of dropping them. */}
+            {params.device && params.device !== "all" && (
+              <input type="hidden" name="device" value={params.device} />
+            )}
+            {params.source && params.source !== "all" && (
+              <input type="hidden" name="source" value={params.source} />
+            )}
+            {params.color && <input type="hidden" name="color" value={params.color} />}
+            {params.textless === "1" && <input type="hidden" name="textless" value="1" />}
+            {params.oled === "1" && <input type="hidden" name="oled" value="1" />}
+            {params.sort && params.sort !== "popular" && (
+              <input type="hidden" name="sort" value={params.sort} />
+            )}
             <button
               type="submit"
               className="btn-neon shrink-0 rounded-xl px-5 py-2.5 text-xs font-semibold sm:text-sm"
@@ -117,7 +170,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <h2 className="font-display text-lg font-bold text-white">
           {q ? `Results for "${q}"` : "Trending Wallpapers"}
           <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-            ({wallpapers.length} shown)
+            (Page {wallpapers.page} · {wallpapers.items.length} shown)
           </span>
         </h2>
 
@@ -136,7 +189,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       {/* Zero-CLS Masonry Gallery */}
       <div className="mt-5">
-        <MasonryGrid wallpapers={wallpapers} showInFeedAds={true} />
+        <MasonryGrid wallpapers={wallpapers.items} showInFeedAds={true} />
+        <GalleryPagination
+          pathname="/"
+          page={wallpapers.page}
+          hasNextPage={wallpapers.hasNextPage}
+          query={queryStringOf(params)}
+        />
       </div>
 
       {/* Curated Collections Strip */}

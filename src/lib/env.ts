@@ -69,6 +69,35 @@ export function isDemoMode(): boolean {
   return !isSupabaseConfigured();
 }
 
+/**
+ * Paid generation publishes into a live catalog, so every write/queue/budget service
+ * must be present. A missing piece must pause paid work instead of degrading quietly.
+ */
+export function isPaidGenerationReady(): boolean {
+  return (
+    isFalConfigured() &&
+    isR2Configured() &&
+    isSupabaseAdminConfigured() &&
+    isSupabaseConfigured() &&
+    isRedisConfigured()
+  );
+}
+
+/**
+ * True when some live pipeline credentials exist but the pipeline is incomplete.
+ * That is an attempted live deployment, not a demo, and must fail closed.
+ */
+export function hasPartialPaidConfiguration(): boolean {
+  const flags = [
+    isFalConfigured(),
+    isR2Configured(),
+    isSupabaseAdminConfigured(),
+    isSupabaseConfigured(),
+    isRedisConfigured(),
+  ];
+  return flags.some(Boolean) && !flags.every(Boolean);
+}
+
 export function getDailyAiBudgetUsd(): number {
   const parsed = Number.parseFloat(process.env.DAILY_AI_BUDGET_USD ?? "5.00");
   if (!Number.isFinite(parsed) || parsed <= 0) return 5.0;
