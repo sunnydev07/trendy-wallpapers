@@ -25,6 +25,7 @@ import {
   sanitizeAndValidatePrompt,
 } from "@/lib/prompt-safety";
 import { getR2PublicUrl, uploadToR2 } from "@/lib/r2";
+import { readBoundedJson } from "@/lib/request-body";
 import {
   consumeAiQuota,
   FLUX_FLASH_COST_USD,
@@ -49,6 +50,8 @@ export const runtime = "nodejs";
 const REQUEST_BUDGET_MS = 80_000;
 const PROVIDER_BUDGET_MS = 60_000;
 const DOWNLOAD_BUDGET_MS = 30_000;
+/** The generation payload is a short prompt plus enums; 8 KB is already generous. */
+const MAX_GENERATION_BODY_BYTES = 8 * 1024;
 
 const MODEL_MAP = {
   "flux-schnell": {
@@ -183,8 +186,9 @@ export async function GET(request: NextRequest) {
 async function handleGeneration(request: NextRequest) {
   let parsedBody: z.infer<typeof GenerateBodySchema>;
   try {
-    const json = await request.json();
-    parsedBody = GenerateBodySchema.parse(json);
+    parsedBody = GenerateBodySchema.parse(
+      await readBoundedJson(request, MAX_GENERATION_BODY_BYTES)
+    );
   } catch {
     return NextResponse.json(
       { error: "Invalid generation request payload." },

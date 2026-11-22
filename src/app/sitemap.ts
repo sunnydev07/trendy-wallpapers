@@ -8,6 +8,9 @@ import {
 import { getSiteUrl } from "@/lib/env";
 import { getAllGuides } from "@/lib/guides";
 
+// Regenerate hourly so newly published wallpapers are discoverable without a redeploy.
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const now = new Date();

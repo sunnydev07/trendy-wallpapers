@@ -51,6 +51,8 @@ export async function readBoundedStream(
       if (!value) continue;
       total += value.byteLength;
       if (total > maxBytes) {
+        // Stop the producer too; releasing the lock alone leaves the socket streaming.
+        await reader.cancel().catch(() => undefined);
         throw new BoundedBodyError(`Response body exceeds the ${maxBytes} byte limit.`);
       }
       chunks.push(Buffer.from(value));

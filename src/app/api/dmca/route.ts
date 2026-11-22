@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isSupabaseConfigured } from "@/lib/env";
+import { readBoundedJson } from "@/lib/request-body";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+
+/** The claim body is capped at 3,000 characters; 16 KB leaves room for JSON overhead. */
+const MAX_DMCA_BODY_BYTES = 16 * 1024;
 
 const DmcaSchema = z.object({
   wallpaperUrl: z.string().url("Please enter the full URL of the wallpaper."),
@@ -24,7 +28,7 @@ const DmcaSchema = z.object({
 export async function POST(request: NextRequest) {
   let json: unknown;
   try {
-    json = await request.json();
+    json = await readBoundedJson(request, MAX_DMCA_BODY_BYTES);
   } catch {
     return NextResponse.json(
       { error: "Unable to parse DMCA report payload." },

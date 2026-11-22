@@ -136,7 +136,8 @@ export async function fetchFromR2(
     const body = await readBoundedStream(
       response.Body.transformToWebStream(),
       MAX_R2_OBJECT_BYTES,
-      options.signal
+      // Include the 20s R2 deadline: a stalled body must not outlive the request budget.
+      abortSignal
     );
     return body.byteLength > 0 ? body : null;
   } catch (error) {

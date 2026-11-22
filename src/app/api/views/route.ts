@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { incrementViewCount } from "@/lib/data-provider";
 import { isDemoMode } from "@/lib/env";
 import { claimView, hashClientIp, limitViewRequests } from "@/lib/redis";
+import { readBoundedJson } from "@/lib/request-body";
 
 export const runtime = "nodejs";
 
@@ -17,18 +18,9 @@ function clientIp(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: "Invalid view payload." }, { status: 400 });
-  }
-
   let payload: unknown;
   try {
-    const raw = await request.text();
-    if (raw.length > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Invalid view payload." }, { status: 400 });
-    }
-    payload = JSON.parse(raw);
+    payload = await readBoundedJson(request, MAX_BODY_BYTES);
   } catch {
     return NextResponse.json({ error: "Invalid view payload." }, { status: 400 });
   }

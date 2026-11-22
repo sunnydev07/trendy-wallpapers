@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { fetchWithTimeout } from "../src/lib/fetch-with-timeout.ts";
+import {
+  BoundedBodyError,
+  fetchWithTimeout,
+  readBoundedStream,
+} from "../src/lib/fetch-with-timeout.ts";
+import { readBoundedJson } from "../src/lib/request-body.ts";
 
 function startServer(handler) {
   return new Promise((resolve) => {
@@ -45,6 +50,50 @@ test("deadline also covers reading the response body", async () => {
       (error) => error.name === "TimeoutError" || error.name === "AbortError"
     );
   } finally { server.close(); }
+});
+
+test("byte-limit overflow cancels the producer instead of only releasing the lock", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      controller.enqueue(new Uint8Array(64 * 1024));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  await assert.rejects(() => readBoundedStream(stream, 32 * 1024), BoundedBodyError);
+  assert.equal(cancelled, true);
+});
+
+test("bounded JSON reads accept small bodies and reject oversize ones", async () => {
+  const small = new Request("http://localhost/api/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ok: true }),
+  });
+  assert.deepEqual(await readBoundedJson(small, 1024), { ok: true });
+
+  const declared = new Request("http://localhost/api/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ padding: "x".repeat(2048) }),
+  });
+  await assert.rejects(() => readBoundedJson(declared, 1024), BoundedBodyError);
+
+  const chunked = new Request("http://localhost/api/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ padding: "x".repeat(4096) })));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  });
+  await assert.rejects(() => readBoundedJson(chunked, 1024), BoundedBodyError);
 });
 
 test("honours a caller-provided abort signal", async () => {

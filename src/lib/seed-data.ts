@@ -866,8 +866,6 @@ const demoStoreGlobal = globalThis as typeof globalThis & {
 };
 
 const DEMO_STORE_MAX = 200;
-// Only the newest generations are persisted; reading a huge JSON blob at boot would slow startup.
-const DEMO_STORE_PERSIST_MAX = 50;
 
 function demoStorePath(): string {
   // Kept outside .next: that directory is owned by Next's build/cache workers.
@@ -897,7 +895,8 @@ async function persistDemoWallpapers(items: Wallpaper[]): Promise<void> {
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
     // Atomic write: a crash mid-write must never leave a truncated JSON blob.
     const tmp = `${target}.tmp`;
-    await fs.promises.writeFile(tmp, JSON.stringify(items.slice(0, DEMO_STORE_PERSIST_MAX)));
+    // Persist the same window the process keeps, so uploads never disappear on restart.
+    await fs.promises.writeFile(tmp, JSON.stringify(items));
     await fs.promises.rename(tmp, target);
   } catch {
     // Demo persistence is best-effort; an unwritable cache must not break generation.
