@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CURATED_WALLPAPERS } from "@/data/curated-wallpapers";
+import { GTA5_VIRAL_WALLPAPERS } from "@/data/gta5-viral-wallpapers";
 import { isDemoMode } from "./env";
 import type {
   CategoryInfo,
@@ -400,6 +401,87 @@ export const COLLECTIONS: WallpaperCollection[] = [
       "neon-arcology-vertical-mobile",
     ],
     tags: ["cyberpunk", "ultrawide", "3440x1440", "5120x1440", "battlestation"],
+  },
+  {
+    slug: "gta-v-viral-los-santos-pack",
+    title: "GTA V Viral Los Santos Pack",
+    subtitle:
+      "Twelve official Rockstar press frames that defined the Los Santos look — sunset boulevards, night highways, and Vinewood skies",
+    curator: "Trendy-Wallpapers Curatorial Desk",
+    updatedAt: "2026-11-23",
+    accentHex: "#F59E0B",
+    commentary: [
+      "Los Santos is the visual ancestor of Leonida, and these twelve screenshots are the frames that have come to define Grand Theft Auto V in the public imagination: the black coupe idling under a peach-and-violet sky, the yellow sports car threading a night highway, three men in suits with rifles, a lighthouse alone in turquoise water. All twelve are official Rockstar Games press artwork, sourced at their native 3840 × 2160 and labeled Official Press on every detail page. We did not upscale, repaint, or AI-fill any of them, and we added no watermarks or overlaid type.",
+      "The pack is sequenced as three movements rather than a flat dump of files. It opens with the boulevard and highway frames that read as pure place — warm dusk, then cold neon — before moving to the character and action shots: the crew, Michael on his balcony, Trevor at the burning trailer, the bridge chase at blue hour. The final third pulls away from the city into the wilds: Paleto's lighthouse, the Alamo Sea biplane, the Mount Chiliad cable-car station, and a dirt biker cutting through foggy redwoods. That arc keeps the pack interesting when it rotates on a desktop instead of six near-identical night skylines.",
+      "Each frame earned its place on wallpaper criteria first. The focal subject sits near the center or along a clean horizontal, the corners stay free of high-frequency clutter, and the sky holds a gradient smooth enough to survive 8-bit JPEG without visible banding. Every master is re-encoded at quality 90 with mozjpeg, paired with a 1200-pixel WebP preview for the detail stage and a 480-pixel WebP thumbnail for grids. We also extracted a five-color palette per image, shown as clickable swatches on each wallpaper page, so bias lighting, keyboard backlights, and RGB case fans can be matched to a frame instead of guessed at.",
+      "The pack spans an unusually wide luminance range, which is why it rotates well across different panels. Michael's Midnight Call (mean luma 36.7) and Los Santos Night Highway (39.8) are the true-dark picks for OLED and mini-LED monitors, where their near-black shadows and small specular highlights show off per-pixel contrast. Vinewood Sign Skyline (128.1) and Vinewood Hills Golden Hour (108.0) are the bright counterweights, better suited to a glossy laptop panel in a sunlit room. On a 16:10 laptop or a 21:9 ultrawide, Smart Download center-crops the 16:9 master; the Chiliad and Alamo Sea frames have the most forgiving center composition for that crop, while the police chase loses some bridge at the edges.",
+      "One note on rights, because it matters more here than in our community-photo packs. These images are © Rockstar Games, published as press material, and presented here as editorial wallpaper curation rather than licensed stock or original artwork. We are not affiliated with Rockstar or Take-Two, every page carries the credit line, and our DMCA page is the route for any rights-holder request. Keeping them in their own clearly labeled pack — instead of blending them into the original-art collection — is deliberate: it keeps the source honest and lets readers filter by provenance.",
+    ],
+    editorialNotes: [
+      {
+        slug: "gta5-los-santos-sunset-boulevard-4k",
+        note: "A black coupe idles under peach-to-violet dusk on a palm-lined boulevard. The brightest color sits low and centered, so it warms up a desktop without putting glare behind your icons.",
+      },
+      {
+        slug: "gta5-los-santos-night-highway-4k",
+        note: "A yellow sports car threads a lamp-lit freeway with the skyline behind it. At a mean luma of 39.8 this is one of the two OLED-first frames in the pack, and the dark road gives desktop icons a natural home.",
+      },
+      {
+        slug: "gta5-michaels-midnight-call-4k",
+        note: "Michael takes a call on a balcony above the city, crescent moon and palms behind him. The darkest image here at 36.7 luma, with a cool teal cast that sits comfortably behind a dark-mode editor.",
+      },
+      {
+        slug: "gta5-dusk-police-chase-4k",
+        note: "A black muscle car leads cruisers across a bridge at dusk. Warm taillights against blue hour make it the pack's most cinematic action frame without filling the screen with visual noise.",
+      },
+      {
+        slug: "gta5-the-crew-heist-ready-4k",
+        note: "Michael, Franklin, and Trevor in suits with rifles — the cleanest character portrait of the set. Muted charcoal and cream tones keep it readable behind translucent windows and docks.",
+      },
+      {
+        slug: "gta5-trevors-sandy-shores-sendoff-4k",
+        note: "Trevor watches a trailer burn beneath a desert motel sign. Amber firelight and deep shadows are dramatic without becoming busy, which makes it a strong second-monitor companion.",
+      },
+      {
+        slug: "gta5-vinewood-hills-golden-hour-4k",
+        note: "The backs of the Vinewood letters overlook a hazy skyline in golden hour. Sun flare and layered hills give the frame depth, and the open upper sky leaves room for a clock widget.",
+      },
+      {
+        slug: "gta5-vinewood-sign-skyline-4k",
+        note: "A daylight view of the sign above the city, and the brightest palette in the collection at 128.1 luma. Best on a glossy or mini-LED panel where punch matters more than black depth.",
+      },
+      {
+        slug: "gta5-paleto-lighthouse-aerial-4k",
+        note: "An aerial of the red-and-white Paleto lighthouse against turquoise water and a lone boat. High-key coastal color that breaks up an all-neon desktop rotation.",
+      },
+      {
+        slug: "gta5-alamo-sea-biplane-4k",
+        note: "A biplane banks over the Alamo Sea valley at golden hour with a train below. The wide tonal range from field shadow to bright haze suits 4K laptop panels especially well.",
+      },
+      {
+        slug: "gta5-mount-chiliad-sunset-station-4k",
+        note: "The cable-car station at sunset, with ridges fading into violet. A centered horizon and calm upper sky make it the most forgiving frame to crop for 16:10 laptops and 21:9 displays.",
+      },
+      {
+        slug: "gta5-foggy-forest-pursuit-4k",
+        note: "A dirt biker tears through foggy redwoods with police SUVs behind. Cool fog and warm tail-lights add motion, but the muted palette keeps it from overpowering icons.",
+      },
+    ],
+    wallpaperSlugs: [
+      "gta5-los-santos-sunset-boulevard-4k",
+      "gta5-los-santos-night-highway-4k",
+      "gta5-michaels-midnight-call-4k",
+      "gta5-dusk-police-chase-4k",
+      "gta5-the-crew-heist-ready-4k",
+      "gta5-trevors-sandy-shores-sendoff-4k",
+      "gta5-vinewood-hills-golden-hour-4k",
+      "gta5-vinewood-sign-skyline-4k",
+      "gta5-paleto-lighthouse-aerial-4k",
+      "gta5-alamo-sea-biplane-4k",
+      "gta5-mount-chiliad-sunset-station-4k",
+      "gta5-foggy-forest-pursuit-4k",
+    ],
+    tags: ["gta 5", "los santos", "official press", "4k", "rockstar", "wallpaper pack"],
   },
 ];
 
@@ -924,6 +1006,7 @@ export async function registerDemoWallpaper(wallpaper: Wallpaper): Promise<void>
 export function incrementDemoWallpaperViews(wallpaperId: string): boolean {
   const exists =
     runtimeDemoWallpapers.some((item) => item.id === wallpaperId) ||
+    GTA5_VIRAL_WALLPAPERS.some((item) => item.id === wallpaperId) ||
     CURATED_WALLPAPERS.some((item) => item.id === wallpaperId) ||
     SEED_WALLPAPERS.some((item) => item.id === wallpaperId);
   if (!exists) return false;
@@ -933,7 +1016,12 @@ export function incrementDemoWallpaperViews(wallpaperId: string): boolean {
 }
 
 export function getDemoWallpapers(): Wallpaper[] {
-  const catalog = [...runtimeDemoWallpapers, ...CURATED_WALLPAPERS, ...SEED_WALLPAPERS];
+  const catalog = [
+    ...runtimeDemoWallpapers,
+    ...GTA5_VIRAL_WALLPAPERS,
+    ...CURATED_WALLPAPERS,
+    ...SEED_WALLPAPERS,
+  ];
   return catalog.map((wallpaper) => {
     const extraViews = demoViewCounts[wallpaper.id];
     return extraViews

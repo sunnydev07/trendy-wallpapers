@@ -91,7 +91,7 @@ function matchesColorHex(colors: string[], targetHex: string): boolean {
 }
 
 const KNOWN_DEVICES = new Set<string>(["desktop", "ultrawide", "mobile", "tablet"]);
-const KNOWN_SOURCES = new Set<string>(["all", "human", "ai"]);
+const KNOWN_SOURCES = new Set<string>(["all", "human", "ai", "press"]);
 const KNOWN_SORTS = new Set<string>(["popular", "newest", "views"]);
 
 function normalizeHexColor(raw: unknown): string | undefined {
@@ -211,6 +211,8 @@ export function applyInMemoryFilters(
     );
   } else if (normalized.source === "ai") {
     result = result.filter((item) => item.source_type === "ai_generated");
+  } else if (normalized.source === "press") {
+    result = result.filter((item) => item.source_type === "official_press");
   }
 
   if (normalized.color) {

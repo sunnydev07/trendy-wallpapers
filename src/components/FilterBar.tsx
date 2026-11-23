@@ -27,6 +27,7 @@ const SOURCE_OPTIONS: { value: SourceFilterValue; label: string }[] = [
   { value: "all", label: "All Sources" },
   { value: "human", label: "Human & Licensed" },
   { value: "ai", label: "AI Generated" },
+  { value: "press", label: "Official Press" },
 ];
 
 const DEVICE_OPTIONS: { value: DeviceType | "all"; label: string }[] = [

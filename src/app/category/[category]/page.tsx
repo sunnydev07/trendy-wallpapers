@@ -1,3 +1,4 @@
+import { Newspaper } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -90,6 +91,17 @@ export default async function CategoryPage({
     Object.entries(query).filter(([, value]) => typeof value === "string" && value) as [string, string][]
   ).toString();
 
+  // Shortcut chip: applies the press filter while keeping any other active filters.
+  const isPressFilterActive = query.source === "press";
+  const pressParams = new URLSearchParams(currentQuery);
+  pressParams.delete("page");
+  if (isPressFilterActive) {
+    pressParams.delete("source");
+  } else {
+    pressParams.set("source", "press");
+  }
+  const pressQuery = pressParams.toString();
+
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
       <header className="glass-surface rounded-3xl p-6 sm:p-8">
@@ -123,6 +135,21 @@ export default async function CategoryPage({
               {cat.name}
             </Link>
           ))}
+
+          {info.slug === "gta-6-vice-city" && (
+            <Link
+              href={`/category/${info.slug}${pressQuery ? `?${pressQuery}` : ""}`}
+              aria-current={isPressFilterActive ? "true" : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+                isPressFilterActive
+                  ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
+                  : "border-amber-400/25 bg-amber-400/[0.06] text-amber-200 hover:border-amber-300/50 hover:text-amber-100"
+              }`}
+            >
+              <Newspaper className="h-3.5 w-3.5" />
+              GTA V Press
+            </Link>
+          )}
         </div>
       </header>
 

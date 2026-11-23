@@ -1,5 +1,6 @@
 import { ArrowRight, Layers } from "lucide-react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdSlot } from "@/components/AdSlot";
@@ -87,6 +88,55 @@ export default async function CollectionPage({ params }: CollectionPageProps) {
       <div className="mt-10">
         <MasonryGrid wallpapers={wallpapers} showInFeedAds={false} />
       </div>
+
+      {collection.editorialNotes && collection.editorialNotes.length > 0 && (
+        <section className="mt-12">
+          <h2 className="font-display text-xl font-bold text-white">
+            Curator&apos;s Notes, Frame by Frame
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+            What each frame brings to a desktop, and when to reach for it.
+          </p>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {collection.editorialNotes.map((entry, index) => {
+              const wallpaper = wallpapers.find((item) => item.slug === entry.slug);
+              if (!wallpaper) return null;
+
+              return (
+                <Link
+                  key={entry.slug}
+                  href={`/wallpaper/${wallpaper.slug}`}
+                  className="glass-surface group flex gap-4 rounded-2xl p-4 transition hover:border-white/20"
+                >
+                  <div className="relative h-20 w-32 shrink-0 overflow-hidden rounded-xl bg-[#0F1219]">
+                    <Image
+                      src={wallpaper.thumb_url}
+                      alt={wallpaper.title}
+                      fill
+                      unoptimized
+                      sizes="128px"
+                      className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-500">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <h3 className="truncate font-display text-sm font-bold text-white group-hover:text-[#00F0FF]">
+                        {wallpaper.title}
+                      </h3>
+                    </div>
+                    <p className="mt-1.5 text-xs leading-6 text-slate-400">
+                      {entry.note}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <AdSlot
         slot="collection-footer-display"

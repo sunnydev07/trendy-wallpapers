@@ -9,7 +9,7 @@ import { serializeJsonLd } from "@/lib/json-ld";
 export const metadata: Metadata = {
   title: "Curated Wallpaper Collections & Packs",
   description:
-    "Hand-curated wallpaper packs: Vice City neon, true-OLED obsidian essentials, and cyberpunk battlestation panoramas — each with editorial notes and native-resolution downloads.",
+    "Hand-curated wallpaper packs: GTA V official press frames, Vice City neon, true-OLED obsidian essentials, and cyberpunk battlestation panoramas — each with editorial notes and native-resolution downloads.",
 };
 
 export default async function CollectionsIndexPage() {

@@ -4,7 +4,7 @@ export type DeviceType = "desktop" | "ultrawide" | "mobile" | "tablet";
 
 export type AspectRatio = "16:9" | "21:9" | "9:16" | "4:3" | "32:9";
 
-export type SourceFilterValue = "all" | "human" | "ai";
+export type SourceFilterValue = "all" | "human" | "ai" | "press";
 
 export type SortOption = "popular" | "newest" | "views";
 
@@ -89,6 +89,8 @@ export interface WallpaperCollection {
   updatedAt: string;
   accentHex: string;
   commentary: string[]; // 300+ words of original editorial commentary
+  /** Optional frame-by-frame curator notes; rendered beneath the pack grid when present. */
+  editorialNotes?: { slug: string; note: string }[];
   wallpaperSlugs: string[];
   tags: string[];
 }
