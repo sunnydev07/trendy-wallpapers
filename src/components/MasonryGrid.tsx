@@ -152,9 +152,9 @@ export function MasonryGrid({
                         </div>
 
                         <div className="flex shrink-0 items-center -space-x-1">
-                          {wallpaper.dominant_colors.slice(0, 3).map((hex) => (
+                          {wallpaper.dominant_colors.slice(0, 3).map((hex, idx) => (
                             <span
-                              key={hex}
+                              key={`${hex}-${idx}`}
                               className="h-3.5 w-3.5 rounded-full border border-white/30"
                               style={{ backgroundColor: hex }}
                             />

@@ -35,6 +35,7 @@ import {
 } from "@/lib/redis";
 import {
   buildWallpaperSvgMarkup,
+  demoMotifForPreset,
   registerDemoWallpaper,
   svgToDataUri,
 } from "@/lib/seed-data";
@@ -131,6 +132,16 @@ function buildTitleFromPrompt(prompt: string, presetName: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(" ");
   return cleaned ? `${cleaned} — ${presetName}` : `${presetName} AI Wallpaper`;
+}
+
+function buildGenerationTags(
+  presetId: string,
+  aspectRatio: string,
+  prompt: string
+): string[] {
+  return Array.from(
+    new Set(["ai generated", presetId, aspectRatio, ...prompt.toLowerCase().split(/\s+/).slice(0, 4)])
+  );
 }
 
 function buildSeoDescription(
@@ -387,12 +398,7 @@ async function handleGeneration(request: NextRequest) {
         description,
         source_type: "ai_generated",
         category_slug: preset.categorySlug,
-        tags: [
-          "ai generated",
-          preset.id,
-          parsedBody.aspectRatio,
-          ...safety.sanitizedPrompt.toLowerCase().split(/\s+/).slice(0, 4),
-        ],
+        tags: buildGenerationTags(preset.id, parsedBody.aspectRatio, safety.sanitizedPrompt),
         dominant_colors: meta.dominantColors,
         width: meta.width,
         height: meta.height,
@@ -518,20 +524,16 @@ async function handleGeneration(request: NextRequest) {
   }
 
   // 4. Graceful Local Demo Mode Simulation (registers a real navigable /wallpaper/[slug])
-  const palette = preset.isOledDark
-    ? ["#000000", preset.accentHex, "#00F0FF", "#6366F1", "#111827"]
-    : ["#0B0D12", preset.accentHex, "#00F0FF", "#5B21B6", "#1E293B"];
+  const secondaryAccent = preset.accentHex === "#00F0FF" ? "#FF2E93" : "#00F0FF";
+  const palette = Array.from(
+    new Set(
+      preset.isOledDark
+        ? ["#000000", preset.accentHex, secondaryAccent, "#6366F1", "#111827"]
+        : ["#0B0D12", preset.accentHex, secondaryAccent, "#5B21B6", "#1E293B"]
+    )
+  );
 
-  const motif =
-    preset.id === "minimalist-oled"
-      ? "oled"
-      : preset.id === "cyberpunk-rain"
-        ? "cyberpunk"
-        : preset.id === "alpine-night-sky"
-          ? "aurora"
-          : preset.id === "liquid-glass-dark"
-            ? "liquid"
-            : "vice";
+  const motif = demoMotifForPreset(preset.id);
 
   const thumbW = 480;
   const thumbH = Math.round((dims.height / dims.width) * thumbW);
@@ -566,12 +568,7 @@ async function handleGeneration(request: NextRequest) {
     ),
     source_type: "ai_generated",
     category_slug: preset.categorySlug,
-    tags: [
-      "ai generated",
-      preset.id,
-      parsedBody.aspectRatio,
-      ...safety.sanitizedPrompt.toLowerCase().split(/\s+/).slice(0, 4),
-    ],
+    tags: buildGenerationTags(preset.id, parsedBody.aspectRatio, safety.sanitizedPrompt),
     dominant_colors: palette,
     width: dims.width,
     height: dims.height,

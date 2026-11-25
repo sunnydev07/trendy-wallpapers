@@ -38,7 +38,7 @@ export const AI_STYLE_PRESETS: AiStylePreset[] = [
     promptSuffix:
       "modern retrowave synthwave dusk, sleek coastal highway leading toward glowing horizon, violet and coral gradient sky, cinematic anamorphic lens flare, high contrast 8k wallpaper, completely textless",
     accentHex: "#F97316",
-    categorySlug: "gaming",
+    categorySlug: "gta-6-vice-city",
     isOledDark: false,
   },
   {
@@ -58,7 +58,7 @@ export const AI_STYLE_PRESETS: AiStylePreset[] = [
     promptSuffix:
       "dramatic alpine mountain peaks at night under subtle emerald and violet aurora borealis, razor-sharp starfield, calm mirror lake reflection, 8k nature photography wallpaper, textless",
     accentHex: "#10B981",
-    categorySlug: "nature",
+    categorySlug: "nature-cosmos",
     isOledDark: true,
   },
 ];

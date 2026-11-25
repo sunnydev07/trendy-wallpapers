@@ -8,8 +8,10 @@ import {
   MAX_MULTIPART_BYTES,
   contentTypeForFormat,
   generateThumbnailBuffer,
+  inspectImageMetadata,
   inspectWallpaperBuffer,
   normalizeStoredFormat,
+  type DecodedImageMetadata,
 } from "@/lib/image-processing";
 import { uploadToR2 } from "@/lib/r2";
 import { registerDemoWallpaper, saveLocalUpload } from "@/lib/seed-data";
@@ -159,24 +161,32 @@ export async function POST(request: NextRequest) {
 
     const originalBuffer = Buffer.from(await file.arrayBuffer());
 
-    let metadata: Awaited<ReturnType<typeof inspectWallpaperBuffer>>;
-    let thumbBuffer: Buffer;
+    let decodedMeta: DecodedImageMetadata;
     try {
-      [metadata, thumbBuffer] = await Promise.all([
-        inspectWallpaperBuffer(originalBuffer),
-        generateThumbnailBuffer(originalBuffer, 480),
-      ]);
+      decodedMeta = await inspectImageMetadata(originalBuffer);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unreadable image data.";
       return NextResponse.json({ error: `Invalid image file: ${message}` }, { status: 400 });
     }
 
-    const originalExt = normalizeStoredFormat(metadata.format);
+    const originalExt = normalizeStoredFormat(decodedMeta.format);
     if (!originalExt) {
       return NextResponse.json(
-        { error: `Unsupported decoded image format: ${metadata.format}.` },
+        { error: `Unsupported decoded image format: ${decodedMeta.format}.` },
         { status: 415, headers: { "Cache-Control": "no-store" } }
       );
+    }
+
+    let metadata: Awaited<ReturnType<typeof inspectWallpaperBuffer>>;
+    let thumbBuffer: Buffer;
+    try {
+      [metadata, thumbBuffer] = await Promise.all([
+        inspectWallpaperBuffer(originalBuffer, { metadata: decodedMeta }),
+        generateThumbnailBuffer(originalBuffer, 480),
+      ]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unreadable image data.";
+      return NextResponse.json({ error: `Invalid image file: ${message}` }, { status: 400 });
     }
 
     const slug = `${slugify(title)}-${crypto.randomUUID().slice(0, 8)}`;
@@ -287,15 +297,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      status: "processed_demo",
-      mode: "demo",
-      slug,
-      metadata,
-      r2OriginalKey,
-      r2ThumbKey,
-      thumbBytes: thumbBuffer.byteLength,
-    });
+    return NextResponse.json(
+      {
+        error:
+          "Live database write credentials (SUPABASE_SERVICE_ROLE_KEY) are not configured, so the upload was not persisted.",
+        code: "STORAGE_UNAVAILABLE",
+      },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected upload error";
     return NextResponse.json({ error: message }, { status: 500 });

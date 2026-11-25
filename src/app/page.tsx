@@ -107,6 +107,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="glass-surface flex items-center gap-2 rounded-2xl p-2 focus-within:border-[#00F0FF]/50">
             <Search className="ml-3 h-5 w-5 shrink-0 text-slate-400" />
             <input
+              key={q}
               type="search"
               name="q"
               defaultValue={q}
@@ -210,16 +211,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               Curated Wallpaper Collections
             </h2>
           </div>
-          <Link
-            href="/guides"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white"
-          >
-            Read Display Guides
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/collections"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white"
+            >
+              All Collections
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            <Link
+              href="/guides"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white"
+            >
+              Read Display Guides
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
           {collections.map((col) => (
             <Link
               key={col.slug}

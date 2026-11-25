@@ -10,7 +10,20 @@ export const runtime = "nodejs";
 const MAX_DMCA_BODY_BYTES = 16 * 1024;
 
 const DmcaSchema = z.object({
-  wallpaperUrl: z.string().url("Please enter the full URL of the wallpaper."),
+  wallpaperUrl: z
+    .string()
+    .url("Please enter the full URL of the wallpaper.")
+    .refine(
+      (value) => {
+        try {
+          const protocol = new URL(value).protocol;
+          return protocol === "http:" || protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "Wallpaper URL must start with http:// or https://." }
+    ),
   wallpaperId: z.string().uuid().optional().or(z.literal("")),
   reporterName: z.string().min(2, "Please provide your full legal name.").max(120),
   reporterEmail: z.string().email("Please enter a valid contact email."),

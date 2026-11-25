@@ -51,11 +51,18 @@ function unitsToUsd(units: number): number {
 }
 
 /** Returns null for missing, malformed, fractional, or negative counter values. */
-function parseUnits(raw: unknown): number | null {
+export function parseQuotaUnits(raw: unknown): number | null {
   if (raw === null || raw === undefined) return 0;
-  const value = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
-  if (!Number.isSafeInteger(value) || value < 0) return null;
-  return value;
+  if (typeof raw === "number") {
+    return Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const value = Number(trimmed);
+    return Number.isSafeInteger(value) ? value : null;
+  }
+  return null;
 }
 
 /**
@@ -166,7 +173,7 @@ export async function getDailyAiSpendUsd(): Promise<number> {
   } catch {
     throw new Error("Quota storage unavailable.");
   }
-  const units = parseUnits(raw);
+  const units = parseQuotaUnits(raw);
   if (units === null) throw new Error("Quota storage returned an invalid spend value.");
   return unitsToUsd(units);
 }
@@ -190,8 +197,8 @@ export async function getAiQuotaStatus(
     throw new Error("Quota storage unavailable.");
   }
 
-  const spendUnits = parseUnits(rawSpend);
-  const usageUnits = parseUnits(rawUsage);
+  const spendUnits = parseQuotaUnits(rawSpend);
+  const usageUnits = parseQuotaUnits(rawUsage);
   if (spendUnits === null || usageUnits === null) {
     throw new Error("Quota storage returned an invalid counter value.");
   }
@@ -232,6 +239,16 @@ export async function consumeAiQuota(
   if (!redis) {
     const spendUnits = syncDemoSpend();
     const today = getUtcDateKey();
+    if (
+      !sweepDemoMap(demoUsageMap, (entry) => entry.date !== today) &&
+      !demoUsageMap.has(identifier)
+    ) {
+      return {
+        allowed: false,
+        reason: "quota_unavailable",
+        quota: demoStatus(identifier, isAuthenticated),
+      };
+    }
     const record = demoUsageMap.get(identifier);
     const used = record && record.date === today ? record.count : 0;
 
@@ -239,7 +256,7 @@ export async function consumeAiQuota(
       return {
         allowed: false,
         reason: "rate_limited",
-        quota: { ...demoStatus(identifier, isAuthenticated), remaining: 0, budgetExhausted: false },
+        quota: { ...demoStatus(identifier, isAuthenticated), remaining: 0 },
       };
     }
     if (spendUnits + costUnits > budgetUnits) {
@@ -310,7 +327,7 @@ export async function consumeAiQuota(
   };
 
   if (code === 1) return { allowed: true, quota: status };
-  if (code === 2) return { allowed: false, reason: "rate_limited", quota: { ...status, remaining: 0, budgetExhausted: false } };
+  if (code === 2) return { allowed: false, reason: "rate_limited", quota: { ...status, remaining: 0 } };
   if (code === 3) return { allowed: false, reason: "budget_exhausted", quota: { ...status, budgetExhausted: true } };
   return { allowed: false, reason: "quota_unavailable", quota: liveUnavailableStatus(isAuthenticated) };
 }

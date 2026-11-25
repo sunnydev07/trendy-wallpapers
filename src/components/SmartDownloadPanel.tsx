@@ -111,8 +111,10 @@ export function SmartDownloadPanel({ wallpaper }: SmartDownloadPanelProps) {
 
       {/* Format Picker */}
       <div className="mt-4">
-        <label className="text-xs font-medium text-slate-400">Output Format</label>
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <span id="output-format-label" className="text-xs font-medium text-slate-400">
+          Output Format
+        </span>
+        <div role="group" aria-labelledby="output-format-label" className="mt-2 grid grid-cols-3 gap-2">
           {FORMAT_OPTIONS.map((opt) => {
             const active = format === opt.format;
             return (

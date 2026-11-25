@@ -34,11 +34,11 @@ export function ColorPaletteChips({ colors }: ColorPaletteChipsProps) {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-        {colors.slice(0, 5).map((hex) => {
+        {colors.slice(0, 5).map((hex, idx) => {
           const isCopied = copiedHex === hex;
           return (
             <div
-              key={hex}
+              key={`${hex}-${idx}`}
               className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition hover:border-white/25"
             >
               <button

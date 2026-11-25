@@ -79,12 +79,21 @@ export function FilterBar() {
   }, []);
 
   const activeParams = new URLSearchParams(optimisticQuery);
-  const currentDevice = (activeParams.get("device") as DeviceType | "all") ?? "all";
-  const currentSource = (activeParams.get("source") as SourceFilterValue) ?? "all";
+  const rawDevice = activeParams.get("device") ?? "all";
+  const currentDevice = (DEVICE_OPTIONS.some((opt) => opt.value === rawDevice)
+    ? rawDevice
+    : "all") as DeviceType | "all";
+  const rawSource = activeParams.get("source") ?? "all";
+  const currentSource = (SOURCE_OPTIONS.some((opt) => opt.value === rawSource)
+    ? rawSource
+    : "all") as SourceFilterValue;
   const currentColor = activeParams.get("color") ?? "";
   const currentTextless = activeParams.get("textless") === "1";
   const currentOled = activeParams.get("oled") === "1";
-  const currentSort = (activeParams.get("sort") as SortOption) ?? "popular";
+  const rawSort = activeParams.get("sort") ?? "popular";
+  const currentSort = (["popular", "newest", "views"].includes(rawSort)
+    ? rawSort
+    : "popular") as SortOption;
 
   const hasActiveFilters =
     currentDevice !== "all" ||
@@ -240,6 +249,8 @@ export function FilterBar() {
           <div className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/40 px-2.5 py-1.5">
             <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
             <select
+              id="wallpaper-sort"
+              name="sort"
               aria-label="Sort wallpapers"
               value={currentSort}
               onChange={(e) => updateParam("sort", e.target.value)}

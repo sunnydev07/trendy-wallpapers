@@ -220,9 +220,13 @@ export function resolveOutputDimensions(
         Math.max(1, Math.round(srcHeight * scale))
       );
     }
-    const insideWidth = width ?? Math.round((height as number) * (srcWidth / srcHeight));
-    const insideHeight = height ?? Math.round(insideWidth * (srcHeight / srcWidth));
-    return boundOutputDimensions(insideWidth, insideHeight);
+    const scale = width
+      ? Math.min(1, width / srcWidth)
+      : Math.min(1, (height as number) / srcHeight);
+    return boundOutputDimensions(
+      Math.max(1, Math.round(srcWidth * scale)),
+      Math.max(1, Math.round(srcHeight * scale))
+    );
   }
 
   const outputWidth = width ?? Math.round((height as number) * (srcWidth / srcHeight));
@@ -416,8 +420,11 @@ export async function readBoundedBody(
   if (Number.isFinite(declared) && declared > maxBytes) {
     throw new ImageTooLargeError(`Response body exceeds the ${maxBytes} byte limit.`);
   }
-  const body = await readBoundedStream(response.body, maxBytes, signal);
-  return body;
+  try {
+    return await readBoundedStream(response.body, maxBytes, signal);
+  } catch (error) {
+    rethrowBoundedBody(error);
+  }
 }
 
 /** Maps a bounded-body failure onto the same typed image error used by routes. */

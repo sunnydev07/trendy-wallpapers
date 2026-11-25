@@ -260,7 +260,7 @@ export async function GET(request: NextRequest) {
         const sourceBuffer = await loadSourceBuffer(
           wallpaper.r2_original_key,
           wallpaper.slug,
-          planned,
+          fitParam === "contain" ? null : planned,
           request.signal
         );
 
@@ -314,7 +314,8 @@ export async function GET(request: NextRequest) {
     headers.set("Content-Length", String(processed.buffer.byteLength));
     headers.set("X-Wallpaper-Source", wallpaper.source_type);
 
-    const filename = `${wallpaper.slug}-${processed.width}x${processed.height}.${processed.extension}`;
+    const safeSlug = wallpaper.slug.replace(/[^a-z0-9_-]/gi, "-") || "wallpaper";
+    const filename = `${safeSlug}-${processed.width}x${processed.height}.${processed.extension}`;
     if (!isPreview) {
       headers.set("Content-Disposition", `attachment; filename="${filename}"`);
     }

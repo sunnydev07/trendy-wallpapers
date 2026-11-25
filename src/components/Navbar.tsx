@@ -13,7 +13,7 @@ const NAV_LINKS = [
   { href: "/", label: "Explore" },
   { href: "/category/gta-6-vice-city", label: "Vice City" },
   { href: "/resolution/4k", label: "4K & OLED" },
-  { href: "/collections/vice-city-midnight-pack", label: "Collections" },
+  { href: "/collections", label: "Collections" },
   { href: "/guides", label: "Guides" },
 ];
 
@@ -48,8 +48,7 @@ export function Navbar({ demoMode = false }: NavbarProps) {
               link.href === "/"
                 ? pathname === "/"
                 : pathname === link.href ||
-                  (link.href.startsWith("/collections/") &&
-                    (pathname === "/collections" || pathname.startsWith("/collections/")));
+                  (link.href === "/collections" && pathname.startsWith("/collections/"));
             return (
               <Link
                 key={link.href}
@@ -91,16 +90,28 @@ export function Navbar({ demoMode = false }: NavbarProps) {
       {mobileOpen && (
         <div className="border-t border-white/[0.08] bg-[#0B0D12]/95 px-4 py-4 lg:hidden">
           <div className="flex flex-col gap-1.5">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/[0.06] hover:text-white"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const isActive =
+                link.href === "/"
+                  ? pathname === "/"
+                  : pathname === link.href ||
+                    (link.href === "/collections" && pathname.startsWith("/collections/"));
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => setMobileOpen(false)}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-medium ${
+                    isActive
+                      ? "bg-white/[0.08] text-white"
+                      : "text-slate-200 hover:bg-white/[0.06] hover:text-white"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
             <Link
               href="/ai-generator"
               onClick={() => setMobileOpen(false)}

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CURATED_WALLPAPERS } from "@/data/curated-wallpapers";
@@ -970,17 +971,39 @@ function readPersistedDemoWallpapers(): Wallpaper[] {
   }
 }
 
+const PRESET_MOTIFS: Record<string, DemoArtSpec["motif"]> = {
+  "minimalist-oled": "oled",
+  "cyberpunk-rain": "cyberpunk",
+  "alpine-night-sky": "aurora",
+  "liquid-glass-dark": "liquid",
+  "synthwave-horizon": "horizon",
+  "vice-city-neon": "vice",
+};
+
+/** Maps an AI Studio preset ID to the matching procedural SVG motif. */
+export function demoMotifForPreset(presetId: string): DemoArtSpec["motif"] {
+  return PRESET_MOTIFS[presetId] ?? "vice";
+}
+
+function inferRuntimeMotif(wallpaper: Wallpaper): DemoArtSpec["motif"] {
+  for (const tag of wallpaper.tags) {
+    if (tag in PRESET_MOTIFS) return PRESET_MOTIFS[tag];
+  }
+  return wallpaper.is_oled_dark ? "oled" : "vice";
+}
+
 async function persistDemoWallpapers(items: Wallpaper[]): Promise<void> {
   if (!isDemoMode()) return;
+  const target = demoStorePath();
+  // Unique temp path prevents concurrent demo registrations from clobbering one file.
+  const tmp = `${target}.${crypto.randomUUID()}.tmp`;
   try {
-    const target = demoStorePath();
     await fs.promises.mkdir(path.dirname(target), { recursive: true });
-    // Atomic write: a crash mid-write must never leave a truncated JSON blob.
-    const tmp = `${target}.tmp`;
     // Persist the same window the process keeps, so uploads never disappear on restart.
     await fs.promises.writeFile(tmp, JSON.stringify(items));
     await fs.promises.rename(tmp, target);
   } catch {
+    await fs.promises.unlink(tmp).catch(() => undefined);
     // Demo persistence is best-effort; an unwritable cache must not break generation.
   }
 }
@@ -1061,6 +1084,7 @@ export async function saveLocalUpload(
 ): Promise<{ originalKey: string; thumbKey: string }> {
   if (!isDemoMode()) throw new Error("Local upload storage is only used in demo mode.");
   const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
+  if (!safeSlug) throw new Error("Invalid upload slug.");
   const root = uploadRoot();
   const originalsDir = path.join(root, "originals");
   const thumbsDir = path.join(root, "thumbs");
@@ -1127,7 +1151,7 @@ export function getDemoArtSvgForSlug(
     colors: spec.dominant_colors,
     width,
     height,
-    motif: "motif" in spec ? spec.motif : spec.is_oled_dark ? "oled" : "vice",
+    motif: "motif" in spec ? spec.motif : inferRuntimeMotif(spec),
     seedIndex: index >= 0 ? index : spec.slug.length,
   });
   if (demoSvgCache.size >= 64) demoSvgCache.delete(demoSvgCache.keys().next().value!);

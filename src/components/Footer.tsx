@@ -79,7 +79,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/collections/vice-city-midnight-pack" className="hover:text-white">
+                <Link href="/collections" className="hover:text-white">
                   Curated Collections
                 </Link>
               </li>

@@ -269,7 +269,10 @@ export function AiStudioClient() {
 
         {/* Phone Clock Margin Toggle (shown when 9:16 selected) */}
         {aspectRatio === "9:16" && (
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <label
+            htmlFor="phone-clock-margin"
+            className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+          >
             <div className="flex items-center gap-2.5">
               <Smartphone className="h-4 w-4 text-[#FF2E93]" />
               <div>
@@ -282,6 +285,8 @@ export function AiStudioClient() {
               </div>
             </div>
             <input
+              id="phone-clock-margin"
+              name="phoneClockMargin"
               type="checkbox"
               checked={phoneClockMargin}
               onChange={(e) => setPhoneClockMargin(e.target.checked)}
